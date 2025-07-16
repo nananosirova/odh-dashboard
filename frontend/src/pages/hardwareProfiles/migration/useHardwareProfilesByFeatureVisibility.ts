@@ -8,6 +8,7 @@ import useMigratedHardwareProfiles from './useMigratedHardwareProfiles';
 export const useHardwareProfilesByFeatureVisibility = (
   visibility?: HardwareProfileFeatureVisibility[],
   namespace?: string,
+  legacyOnly = false,
 ): [
   data: HardwareProfileKind[],
   loaded: boolean,
@@ -30,8 +31,8 @@ export const useHardwareProfilesByFeatureVisibility = (
   const loadError = loadErrorMigratedHardwareProfiles || loadErrorHardwareProfiles;
 
   const allHardwareProfiles = React.useMemo(
-    () => [...migratedHardwareProfiles, ...hardwareProfiles],
-    [migratedHardwareProfiles, hardwareProfiles],
+    () => [...migratedHardwareProfiles, ...(!legacyOnly ? hardwareProfiles : [])],
+    [migratedHardwareProfiles, hardwareProfiles, legacyOnly],
   );
 
   // only show valid profiles

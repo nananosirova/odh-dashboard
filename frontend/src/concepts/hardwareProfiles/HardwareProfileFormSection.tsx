@@ -19,6 +19,7 @@ type HardwareProfileFormSectionProps<T extends PodSpecOptions> = {
   visibleIn?: HardwareProfileFeatureVisibility[];
   podSpecOptionsState: PodSpecOptionsState<T>;
   isHardwareProfileSupported?: (profile: HardwareProfileKind) => boolean;
+  legacyOnly?: boolean;
 };
 
 const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSpecOptions>> = ({
@@ -27,6 +28,7 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
   isEditing,
   visibleIn = [],
   isHardwareProfileSupported = () => false,
+  legacyOnly = false,
 }) => {
   const {
     hardwareProfile: { formData, initialHardwareProfile, setFormData },
@@ -35,8 +37,16 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
 
   const validation = useValidation(formData, hardwareProfileValidationSchema);
   const hasValidationErrors = Object.keys(validation.getAllValidationIssues()).length > 0;
-  const [hardwareProfiles, loaded, error] = useHardwareProfilesByFeatureVisibility(visibleIn);
-  const projectScopedHardwareProfiles = useHardwareProfilesByFeatureVisibility(visibleIn, project);
+  const [hardwareProfiles, loaded, error] = useHardwareProfilesByFeatureVisibility(
+    visibleIn,
+    undefined,
+    legacyOnly,
+  );
+  const projectScopedHardwareProfiles = useHardwareProfilesByFeatureVisibility(
+    visibleIn,
+    project,
+    legacyOnly,
+  );
 
   const [isExpanded, setIsExpanded] = React.useState(false);
 

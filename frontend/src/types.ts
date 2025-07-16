@@ -294,6 +294,7 @@ export type HardwareProfileAnnotations = Partial<{
   'opendatahub.io/description': string;
   'opendatahub.io/dashboard-feature-visibility': string; // JSON stringified HardwareProfileFeatureVisibility[]
   'opendatahub.io/disabled': string;
+  'opendatahub.io/is-migrated-hardware-profile': string;
 }>;
 
 export type HardwareProfileScheduling = {

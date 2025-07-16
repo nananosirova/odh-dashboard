@@ -9,7 +9,12 @@ import {
   k8sPatchResource,
 } from '@openshift/dynamic-plugin-sdk-utils';
 import { InferenceServiceModel } from '#~/api/models';
-import { InferenceServiceKind, K8sAPIOptions, KnownLabels } from '#~/k8sTypes';
+import {
+  InferenceServiceAnnotations,
+  InferenceServiceKind,
+  K8sAPIOptions,
+  KnownLabels,
+} from '#~/k8sTypes';
 import { CreatingInferenceServiceObject } from '#~/pages/modelServing/screens/types';
 import { applyK8sAPIOptions } from '#~/api/apiMergeUtils';
 import { getInferenceServiceDeploymentMode } from '#~/pages/modelServing/screens/projects/utils';
@@ -93,24 +98,43 @@ export const assembleInferenceService = (
   const splitArgs: string[] = nonEmptyArgs.flatMap(parseCommandLine);
   const nonEmptyEnvVars = servingRuntimeEnvVars?.filter((ev) => ev.name) || [];
 
+  const annotations: InferenceServiceAnnotations = {
+    'openshift.io/display-name': data.name.trim(),
+    'serving.kserve.io/deploymentMode': getInferenceServiceDeploymentMode(
+      !!isModelMesh,
+      !!data.isKServeRawDeployment,
+    ),
+    ...(!isModelMesh &&
+      !data.isKServeRawDeployment && {
+        'serving.knative.openshift.io/enablePassthrough': 'true',
+        'sidecar.istio.io/inject': 'true',
+        'sidecar.istio.io/rewriteAppHTTPProbers': 'true',
+      }),
+  };
+
+  const dashboardNamespace = data.dashboardNamespace ?? '';
+  if (!isModelMesh && podSpecOptions && podSpecOptions.selectedHardwareProfile) {
+    const isLegacyHardwareProfile =
+      podSpecOptions.selectedHardwareProfile.metadata.annotations?.[
+        'opendatahub.io/is-legacy-profile'
+      ] === 'true';
+    if (!isLegacyHardwareProfile) {
+      annotations['opendatahub.io/hardware-profile-name'] =
+        podSpecOptions.selectedHardwareProfile.metadata.name;
+      if (podSpecOptions.selectedHardwareProfile.metadata.namespace === project) {
+        annotations['opendatahub.io/hardware-profile-namespace'] = project;
+      } else {
+        annotations['opendatahub.io/hardware-profile-namespace'] = dashboardNamespace;
+      }
+    }
+  }
+
   let updateInferenceService: InferenceServiceKind = inferenceService
     ? {
         ...inferenceService,
         metadata: {
           ...inferenceService.metadata,
-          annotations: {
-            'openshift.io/display-name': data.name.trim(),
-            'serving.kserve.io/deploymentMode': getInferenceServiceDeploymentMode(
-              !!isModelMesh,
-              !!data.isKServeRawDeployment,
-            ),
-            ...(!isModelMesh &&
-              !data.isKServeRawDeployment && {
-                'serving.knative.openshift.io/enablePassthrough': 'true',
-                'sidecar.istio.io/inject': 'true',
-                'sidecar.istio.io/rewriteAppHTTPProbers': 'true',
-              }),
-          },
+          annotations,
           labels: {
             ...inferenceService.metadata.labels,
           },
@@ -146,19 +170,7 @@ export const assembleInferenceService = (
         metadata: {
           name,
           namespace: project,
-          annotations: {
-            'openshift.io/display-name': data.name.trim(),
-            'serving.kserve.io/deploymentMode': getInferenceServiceDeploymentMode(
-              !!isModelMesh,
-              !!data.isKServeRawDeployment,
-            ),
-            ...(!isModelMesh &&
-              !data.isKServeRawDeployment && {
-                'serving.knative.openshift.io/enablePassthrough': 'true',
-                'sidecar.istio.io/inject': 'true',
-                'sidecar.istio.io/rewriteAppHTTPProbers': 'true',
-              }),
-          },
+          annotations,
           labels: {
             [KnownLabels.DASHBOARD_RESOURCE]: 'true',
             ...data.labels,

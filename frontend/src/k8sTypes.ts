@@ -157,7 +157,6 @@ export type ServingRuntimeAnnotations = Partial<{
   'opendatahub.io/accelerator-name': string;
   'opendatahub.io/apiProtocol': string;
   'opendatahub.io/serving-runtime-scope': string;
-  'opendatahub.io/hardware-profile-namespace': string | undefined;
   'opendatahub.io/accelerator-profile-namespace': string | undefined;
   'enable-route': string;
   'enable-auth': string;
@@ -494,9 +493,16 @@ export enum DeploymentMode {
   Serverless = 'Serverless',
 }
 
-export type InferenceServiceAnnotations = Partial<{
-  'security.opendatahub.io/enable-auth': string;
-}>;
+export type InferenceServiceAnnotations = DisplayNameAnnotations &
+  Partial<{
+    'security.opendatahub.io/enable-auth': string;
+    'serving.kserve.io/deploymentMode': DeploymentMode;
+    'serving.knative.openshift.io/enablePassthrough': 'true';
+    'sidecar.istio.io/inject': 'true';
+    'sidecar.istio.io/rewriteAppHTTPProbers': 'true';
+    'opendatahub.io/hardware-profile-name': string;
+    'opendatahub.io/hardware-profile-namespace': string;
+  }>;
 
 export type InferenceServiceLabels = Partial<{
   'networking.knative.dev/visibility': string;
@@ -511,14 +517,7 @@ export type InferenceServiceKind = K8sResourceCommon & {
   metadata: {
     name: string;
     namespace: string;
-    annotations?: InferenceServiceAnnotations &
-      DisplayNameAnnotations &
-      Partial<{
-        'serving.kserve.io/deploymentMode': DeploymentMode;
-        'serving.knative.openshift.io/enablePassthrough': 'true';
-        'sidecar.istio.io/inject': 'true';
-        'sidecar.istio.io/rewriteAppHTTPProbers': 'true';
-      }>;
+    annotations?: InferenceServiceAnnotations;
     labels?: InferenceServiceLabels;
   };
   spec: {

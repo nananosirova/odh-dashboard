@@ -24,6 +24,7 @@ type ServingRuntimeSizeSectionProps = {
   infoContent?: string;
   isEditing?: boolean;
   customDefaults?: ModelServingSize;
+  legacyHardwareProfilesOnly?: boolean;
 };
 
 const ServingRuntimeSizeSection = ({
@@ -33,6 +34,7 @@ const ServingRuntimeSizeSection = ({
   infoContent,
   isEditing = false,
   customDefaults,
+  legacyHardwareProfilesOnly = false,
 }: ServingRuntimeSizeSectionProps): React.ReactNode => {
   const isHardwareProfileEnabled = useIsAreaAvailable(SupportedArea.HARDWARE_PROFILES).status;
 
@@ -104,6 +106,7 @@ const ServingRuntimeSizeSection = ({
           isEditing={isEditing}
           isHardwareProfileSupported={isHardwareProfileSupported}
           visibleIn={[HardwareProfileFeatureVisibility.MODEL_SERVING]}
+          legacyOnly={legacyHardwareProfilesOnly}
         />
       ) : (
         <FormGroup
