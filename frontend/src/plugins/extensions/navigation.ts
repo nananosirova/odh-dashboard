@@ -415,7 +415,7 @@ const extensions: NavExtension[] = [
       path: '/hardwareProfiles/*',
       statusProviderId: 'hardware-profiles.status',
       accessReview: {
-        group: 'dashboard.opendatahub.io',
+        group: 'infrastructure.opendatahub.io',
         resource: 'hardwareprofiles',
         verb: 'create',
       },
