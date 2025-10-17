@@ -194,7 +194,10 @@ export const validateProfileWarning = (
 
 export const isHardwareProfileValid = (hardwareProfile: HardwareProfileKind): boolean => {
   const warnings = validateProfileWarning(hardwareProfile);
-  return warnings.length === 0;
+  //Allow empty hardware profiles
+  return !warnings.some(
+    (warning) => warning.type !== HardwareProfileWarningType.HARDWARE_PROFILES_MISSING_CPU_MEMORY,
+  );
 };
 
 export const getHardwareProfileDisplayName = (hardwareProfile: HardwareProfileKind): string =>

@@ -62,6 +62,20 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
     setFormData('selectedProfile', profile);
     setFormData('useExistingSettings', false);
     setFormData('resources', newResources);
+    const allKeys = new Set([
+      ...Object.keys(newResources.requests || {}),
+      ...Object.keys(newResources.limits || {}),
+    ]);
+    setFormData('uncheckedIdentifiers', {
+      requests: Array.from(allKeys).reduce((acc: Record<string, boolean>, key) => {
+        acc[key] = key in (newResources.requests || {});
+        return acc;
+      }, {}),
+      limits: Array.from(allKeys).reduce((acc: Record<string, boolean>, key) => {
+        acc[key] = key in (newResources.limits || {});
+        return acc;
+      }, {}),
+    });
   };
 
   return (
@@ -115,8 +129,28 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
               >
                 <HardwareProfileCustomize
                   identifiers={formData.selectedProfile.spec.identifiers}
-                  data={formData.resources}
-                  setData={(newData: ContainerResources) => setFormData('resources', newData)}
+                  data={{
+                    resources: formData.resources,
+                    uncheckedIdentifiers: formData.uncheckedIdentifiers ?? {
+                      requests: {},
+                      limits: {},
+                    },
+                  }}
+                  setData={(
+                    newData: ContainerResources,
+                    newUncheckedIdentifiers?: {
+                      requests: { [key: string]: boolean };
+                      limits: { [key: string]: boolean };
+                    },
+                  ) => {
+                    console.log('🔧 HardwareProfileFormSection - setData called with:', {
+                      newData,
+                      newUncheckedIdentifiers,
+                    });
+                    setFormData('resources', newData);
+                    setFormData('uncheckedIdentifiers', newUncheckedIdentifiers);
+                    console.log('🔧 HardwareProfileFormSection - after setFormData, formData:', formData);
+                  }}
                 />
               </ExpandableSection>
             </StackItem>

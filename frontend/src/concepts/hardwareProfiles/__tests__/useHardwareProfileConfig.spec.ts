@@ -46,6 +46,7 @@ describe('useHardwareProfileConfig', () => {
       formData: {
         selectedProfile: undefined,
         useExistingSettings: false,
+        uncheckedIdentifiers: { requests: {}, limits: {} },
       },
       initialHardwareProfile: undefined,
       isFormDataValid: false,
@@ -99,6 +100,10 @@ describe('useHardwareProfileConfig', () => {
         selectedProfile: hardwareProfile,
         useExistingSettings: false,
         resources,
+        uncheckedIdentifiers: {
+          requests: { cpu: true, memory: true },
+          limits: { cpu: true, memory: true },
+        },
       },
       initialHardwareProfile: hardwareProfile,
       isFormDataValid: true,
@@ -180,6 +185,7 @@ describe('useHardwareProfileConfig', () => {
     expect(state.formData).toEqual({
       selectedProfile: undefined,
       useExistingSettings: false,
+      uncheckedIdentifiers: { requests: {}, limits: {} },
     });
   });
 

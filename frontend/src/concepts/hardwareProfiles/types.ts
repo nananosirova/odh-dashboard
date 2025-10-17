@@ -54,3 +54,13 @@ export type HardwareProfileBindingConfig = {
     name?: string;
   }) => string;
 };
+
+export enum ProfileIdentifier {
+  CPU = 'cpu',
+  MEMORY = 'memory',
+}
+
+export enum ProfileIdentifierType {
+  REQUEST = 'requests',
+  LIMIT = 'limits',
+}

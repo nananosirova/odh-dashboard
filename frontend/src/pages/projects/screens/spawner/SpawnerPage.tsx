@@ -373,23 +373,29 @@ const SpawnerPage: React.FC<SpawnerPageProps> = ({ existingNotebook }) => {
           )}
           <StackItem>
             <CanEnableElyraPipelinesCheck namespace={currentProject.metadata.name}>
-              {(canEnablePipelines) => (
-                <SpawnerFooter
-                  startNotebookData={{
-                    notebookData: k8sNameDescriptionData.data,
-                    projectName: currentProject.metadata.name,
-                    image: selectedImage,
-                    volumes: [],
-                    volumeMounts: [],
-                    podSpecOptions: podSpecOptionsState.podSpecOptions,
-                    dashboardNamespace,
-                  }}
-                  storageData={storageData}
-                  envVariables={envVariables}
-                  connections={notebookConnections}
-                  canEnablePipelines={canEnablePipelines}
-                />
-              )}
+              {(canEnablePipelines) => {
+                console.log('🎯 SpawnerPage - podSpecOptions being passed to SpawnerFooter:', {
+                  resources: podSpecOptionsState.podSpecOptions.resources,
+                  selectedHardwareProfile: podSpecOptionsState.podSpecOptions.selectedHardwareProfile?.metadata.name,
+                });
+                return (
+                  <SpawnerFooter
+                    startNotebookData={{
+                      notebookData: k8sNameDescriptionData.data,
+                      projectName: currentProject.metadata.name,
+                      image: selectedImage,
+                      volumes: [],
+                      volumeMounts: [],
+                      podSpecOptions: podSpecOptionsState.podSpecOptions,
+                      dashboardNamespace,
+                    }}
+                    storageData={storageData}
+                    envVariables={envVariables}
+                    connections={notebookConnections}
+                    canEnablePipelines={canEnablePipelines}
+                  />
+                );
+              }}
             </CanEnableElyraPipelinesCheck>
           </StackItem>
         </Stack>

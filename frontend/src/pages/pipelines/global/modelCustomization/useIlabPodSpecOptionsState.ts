@@ -102,6 +102,10 @@ export const useIlabPodSpecOptionsState = (
           requests: hardwareProfile.formData.resources?.requests ?? {},
           limits: hardwareProfile.formData.resources?.limits ?? {},
         },
+        uncheckedIdentifiers: hardwareProfile.formData.uncheckedIdentifiers ?? {
+          requests: {},
+          limits: {},
+        },
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

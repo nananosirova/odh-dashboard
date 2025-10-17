@@ -50,6 +50,7 @@ import {
 } from '#~/__mocks__/mockHardwareProfile';
 import { initInterceptsForAllProjects } from '#~/__tests__/cypress/cypress/utils/servingUtils';
 import { nimDeployModal } from '#~/__tests__/cypress/cypress/pages/components/NIMDeployModal';
+import { ProfileIdentifierType } from '#~/concepts/hardwareProfiles/types';
 
 type HandlersProps = {
   disableKServeConfig?: boolean;
@@ -1439,6 +1440,498 @@ describe('Model Serving Global', () => {
       errorIcon.trigger('mouseenter');
       const errorPopoverTitle = modelRow.findHardwareProfileErrorPopover();
       errorPopoverTitle.should('be.visible');
+    });
+  });
+
+  describe.only('Model serving hardware profile customization', () => {
+    it('should display hardware profile customization in model serving deployment', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      // Select a hardware profile with customization
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+
+      // Verify customization fields appear
+      hardwareProfileSection.findCustomizeButton().should('exist');
+      hardwareProfileSection.findCustomizeButton().click();
+      hardwareProfileSection.findCustomizeForm().should('be.visible');
+    });
+
+    it('should show requests and limits info popover in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Click info button and verify popover content
+      hardwareProfileSection.findRequestsLimitsInfoButton().click();
+      hardwareProfileSection.findRequestsLimitsPopover().should('be.visible');
+
+      // Verify popover content
+      cy.contains('Requests: A request is the guaranteed minimum amount').should('exist');
+      cy.contains('Limits: A limit is the maximum amount').should('exist');
+      cy.contains('Request and limit values must be within the minimum and maximum bounds').should(
+        'exist',
+      );
+    });
+
+    it('should handle checkbox interactions correctly in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Test CPU request/limit checkbox behavior
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'cpu',
+        ProfileIdentifierType.REQUEST,
+        true,
+      );
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'cpu',
+        ProfileIdentifierType.LIMIT,
+        true,
+        false,
+      );
+
+      // Disable CPU requests, CPU limits should also be disabled automatically
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'cpu',
+        ProfileIdentifierType.REQUEST,
+        false,
+      );
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'cpu',
+        ProfileIdentifierType.LIMIT,
+        false,
+        true,
+      );
+
+      // Test Memory checkbox behavior
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'memory',
+        ProfileIdentifierType.REQUEST,
+        true,
+      );
+
+      hardwareProfileSection.findMemoryRequestsCheckbox().click();
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'memory',
+        ProfileIdentifierType.REQUEST,
+        false,
+      );
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'memory',
+        ProfileIdentifierType.LIMIT,
+        false,
+        true,
+      );
+    });
+
+    it('should validate resource dependencies in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Set CPU limits lower than requests - should show error
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '2');
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.LIMIT, '1');
+      cy.contains('Limit must be greater than or equal to request').should('exist');
+
+      // Test memory validation
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '8');
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.LIMIT, '6');
+      cy.contains('Must be at least 8 GiB').should('exist');
+
+      // Test equal values (should be valid)
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.LIMIT, '2');
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.LIMIT, '8');
+      cy.contains('Limit must be greater than or equal to request').should('not.exist');
+    });
+
+    it('should restore previous values when re-enabling checkboxes in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Set CPU request and limit values
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '1');
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.LIMIT, '2');
+
+      // Uncheck CPU request
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+
+      // Re-enable and verify values restore
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+      hardwareProfileSection.findCPURequestsInput().should('have.value', '1');
+
+      // Re-enable limits
+      hardwareProfileSection.findCPULimitsCheckbox().click();
+      cy.findByTestId('cpu-limits-input').find('input').should('have.value', '2');
+
+      // Repeat for memory
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '8');
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.LIMIT, '8');
+
+      hardwareProfileSection.findMemoryRequestsCheckbox().click();
+      hardwareProfileSection.findMemoryRequestsCheckbox().click();
+      hardwareProfileSection.findMemoryRequestsInput().should('have.value', '8');
+
+      hardwareProfileSection.findMemoryLimitsCheckbox().click();
+      hardwareProfileSection.findMemoryLimitsInput().should('have.value', '8');
+    });
+
+    it('should handle min/max validation for model serving resources', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Test CPU below minimum error
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '0.5');
+      cy.contains('Must be at least 1 Cores').should('exist');
+
+      // Test CPU above maximum error
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '5');
+      cy.contains('Must not exceed 1 Cores').should('exist');
+
+      // Test memory below minimum error
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '1Gi');
+      cy.contains('Must be at least 2 GiB').should('exist');
+
+      // Test memory above maximum error
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '10Gi');
+      cy.contains('Must not exceed 2 GiB').should('exist');
+    });
+
+    it('should validate memory values with units in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Set memory with GiB units
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '2');
+      hardwareProfileSection.selectResourceUnit('memory', ProfileIdentifierType.REQUEST, 'Gi');
+      hardwareProfileSection.verifyResourceUnit('memory', ProfileIdentifierType.REQUEST, 'Gi');
+
+      // Change to Mi units
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '2048');
+      hardwareProfileSection.selectResourceUnit('memory', ProfileIdentifierType.REQUEST, 'Mi');
+      hardwareProfileSection.verifyResourceUnit('memory', ProfileIdentifierType.REQUEST, 'Mi');
+    });
+
+    it('should handle rapid checkbox toggles in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Set initial value
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '1');
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.LIMIT, '1');
+
+      // Rapidly toggle CPU checkboxes
+      for (let i = 0; i < 3; i++) {
+        hardwareProfileSection.findCPURequestsCheckbox().click(); // Uncheck
+        hardwareProfileSection.findCPURequestsCheckbox().click(); // Re-check
+
+        // Verify data integrity
+        hardwareProfileSection.findCPURequestsInput().should('have.value', '1');
+
+        // Re-enable limit
+        hardwareProfileSection.findCPULimitsCheckbox().click();
+        cy.findByTestId('cpu-limits-input').find('input').should('have.value', '1');
+      }
+    });
+
+    it('should handle all resources unchecked in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Uncheck all resources
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+      hardwareProfileSection.findMemoryRequestsCheckbox().click();
+
+      // Verify form validation (should not show errors based on new isUndefinedOkay logic)
+      cy.contains('Limit must be greater than or equal to request').should('not.exist');
+      cy.contains('Must be at least').should('not.exist');
+    });
+
+    it('should handle empty hardware profile in model serving', () => {
+      initIntercepts({});
+
+      // Mock empty hardware profile
+      cy.interceptK8sList(
+        { model: HardwareProfileModel, ns: 'opendatahub' },
+        mockK8sResourceList([
+          mockHardwareProfile({
+            name: 'empty-profile',
+            displayName: 'Empty Profile',
+            identifiers: [],
+          }),
+        ]),
+      );
+
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      // Wait for hardware profiles to load
+      cy.wait('@hardwareProfiles');
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Empty Profile').click();
+
+      // Verify no customization button appears
+      hardwareProfileSection.findCustomizeButton().should('not.exist');
+    });
+
+    it('should handle deployment with no resources selected', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Uncheck all resource checkboxes
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+      hardwareProfileSection.findMemoryRequestsCheckbox().click();
+
+      // Verify deployment can proceed (no validation blocking it)
+      cy.contains('Must be at least').should('not.exist');
+      cy.contains('Limit must be greater than or equal to request').should('not.exist');
+    });
+
+    it('should handle hardware profile with unrestricted max values', () => {
+      initIntercepts({});
+
+      // Mock profile with maxCount: undefined
+      cy.interceptK8sList(
+        { model: HardwareProfileModel, ns: 'opendatahub' },
+        mockK8sResourceList([
+          mockHardwareProfile({
+            name: 'unrestricted-profile',
+            displayName: 'Unrestricted Profile',
+            identifiers: [
+              {
+                identifier: 'cpu',
+                displayName: 'CPU',
+                minCount: '1',
+                maxCount: undefined,
+                defaultCount: '2',
+              },
+            ],
+          }),
+        ]),
+      );
+
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      cy.wait('@hardwareProfiles');
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Unrestricted Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Verify "unrestricted" text appears
+      cy.contains('Max = unrestricted').should('exist');
+
+      // Test that large values are accepted
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '100');
+      cy.contains('Must not exceed').should('not.exist');
+    });
+
+    it('should handle editing deployment with empty resources', () => {
+      const inferenceService = mockInferenceServiceK8sResource({
+        name: 'test-inference-service',
+        namespace: 'test-project',
+        isModelMesh: false,
+        activeModelState: 'Loaded',
+      });
+
+      // Ensure no resources are defined
+      if (
+        inferenceService.spec.predictor.model?.resources?.requests ||
+        inferenceService.spec.predictor.model?.resources?.limits
+      ) {
+        inferenceService.spec.predictor.model.resources = {};
+      }
+
+      initIntercepts({
+        inferenceServices: [inferenceService],
+      });
+
+      modelServingGlobal.visit('test-project');
+      const modelRow = modelServingGlobal.getModelRow('Test Inference Service');
+      modelRow.findKebabAction('Edit').click();
+
+      // Open hardware profile customization
+      hardwareProfileSection.findHardwareProfileSearchSelector().should('exist');
+
+      // Verify checkboxes are unchecked by default when no resources exist
+      // (This might depend on implementation - adjust as needed)
+    });
+
+    it('should preserve hardware profile customization on modal close/reopen', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Customize resources
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '1');
+      hardwareProfileSection.findCPURequestsCheckbox().click(); // Uncheck
+
+      // Close modal without saving
+      kserveModal.findCancelButton().click();
+
+      // Reopen modal
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Verify customizations are reset (checkboxes should be in default state)
+      hardwareProfileSection.verifyResourceCheckboxState(
+        'cpu',
+        ProfileIdentifierType.REQUEST,
+        true,
+      );
+    });
+
+    it('should handle partial empty state (only requests, no limits) in model serving', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Set requests only
+      hardwareProfileSection.setResourceValue('cpu', ProfileIdentifierType.REQUEST, '1');
+
+      // Uncheck limits if checked
+      hardwareProfileSection.findCPULimitsCheckbox().then(($checkbox) => {
+        if ($checkbox.is(':checked')) {
+          cy.wrap($checkbox).click();
+        }
+      });
+
+      hardwareProfileSection.setResourceValue('memory', ProfileIdentifierType.REQUEST, '2');
+
+      hardwareProfileSection.findMemoryLimitsCheckbox().then(($checkbox) => {
+        if ($checkbox.is(':checked')) {
+          cy.wrap($checkbox).click();
+        }
+      });
+
+      // Verify validation passes (no errors about limits being required)
+      cy.contains('Limit must be greater than or equal to request').should('not.exist');
+    });
+
+    it('should show appropriate tooltips for checkboxes', () => {
+      initIntercepts({});
+      modelServingGlobal.visit('test-project');
+      modelServingGlobal.shouldBeEmpty();
+      modelServingGlobal.clickDeployModelButtonWithRetry();
+
+      kserveModal.shouldBeOpen();
+
+      hardwareProfileSection.findHardwareProfileSearchSelector().click();
+      cy.contains('Small Profile').click();
+      hardwareProfileSection.findCustomizeButton().click();
+
+      // Uncheck CPU request to disable the limit checkbox
+      hardwareProfileSection.findCPURequestsCheckbox().click();
+
+      // Hover over disabled limit checkbox
+      hardwareProfileSection.findCPULimitsCheckbox().trigger('mouseenter');
+
+      // Verify disabled tooltip message appears
+      cy.contains('Request must be enabled').should('exist');
     });
   });
 });

@@ -55,6 +55,13 @@ const useNotebookPodSpecOptionsStateBase = (
   const annotationData = {
     selectedHardwareProfile: hardwareProfileConfig.formData.selectedProfile,
   };
+  
+  console.log('📋 useNotebookPodSpecOptionsState - hardwareProfileConfig.formData:', {
+    useExistingSettings: hardwareProfileConfig.formData.useExistingSettings,
+    resources: hardwareProfileConfig.formData.resources,
+    selectedProfile: hardwareProfileConfig.formData.selectedProfile?.metadata.name,
+  });
+  
   if (hardwareProfileConfig.formData.useExistingSettings) {
     // if using existing settings, use existing pod spec options
     podSpecOptions = {
@@ -63,6 +70,7 @@ const useNotebookPodSpecOptionsStateBase = (
       nodeSelector: existingNodeSelector,
       ...annotationData,
     };
+    console.log('📋 useNotebookPodSpecOptionsState - using existing resources:', existingResources);
   } else {
     podSpecOptions = {
       resources: hardwareProfileConfig.formData.resources,
@@ -72,6 +80,7 @@ const useNotebookPodSpecOptionsStateBase = (
         hardwareProfileConfig.formData.selectedProfile?.spec.scheduling?.node?.nodeSelector,
       ...annotationData,
     };
+    console.log('📋 useNotebookPodSpecOptionsState - using formData resources:', hardwareProfileConfig.formData.resources);
   }
 
   return {

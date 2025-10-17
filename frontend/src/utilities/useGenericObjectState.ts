@@ -12,6 +12,10 @@ const useGenericObjectState = <T>(defaultData: T | (() => T)): GenericObjectStat
 
   const setPropValue = React.useCallback<UpdateObjectAtPropAndValue<T>>((propKey, propValue) => {
     setValue((oldValue) => {
+      if (typeof oldValue === 'object' && 'requests' in (oldValue || {})) {
+        console.log('oldValue', oldValue);
+        console.log('newValue', { ...oldValue, [propKey]: propValue });
+      }
       if (oldValue[propKey] !== propValue) {
         return { ...oldValue, [propKey]: propValue };
       }

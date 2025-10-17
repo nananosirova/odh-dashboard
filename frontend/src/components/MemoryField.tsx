@@ -17,11 +17,12 @@ type MemoryFieldProps = {
   isDisabled?: boolean;
 };
 
-type MemoryFieldWithCheckboxProps = Omit<MemoryFieldProps, 'onBlur'> & {
+type MemoryFieldWithCheckboxProps = Omit<MemoryFieldProps, 'onBlur' | 'onChange'> & {
   checkboxId: string;
   label: string;
   checkboxTooltip?: string;
   zodIssue?: ZodIssue | ZodIssue[];
+  onChange: (newValue: string | undefined, checked: boolean) => void;
 };
 
 const MemoryField: React.FC<MemoryFieldProps> = ({
@@ -65,6 +66,12 @@ export const MemoryFieldWithCheckbox: React.FC<MemoryFieldWithCheckboxProps> = (
   // Store the value when the checkbox is unchecked to restore it when the checkbox is checked again
   const storedValue = React.useRef(value);
 
+  React.useEffect(() => {
+    if (value !== undefined) {
+      storedValue.current = value;
+    }
+  }, [value]);
+
   return (
     <Stack hasGutter>
       <Checkbox
@@ -72,11 +79,10 @@ export const MemoryFieldWithCheckbox: React.FC<MemoryFieldWithCheckboxProps> = (
         data-testid={checkboxId}
         isChecked={isChecked}
         onChange={(_, checked) => {
-          if (!checked) {
-            onChange(undefined);
-          } else {
-            onChange(storedValue.current ? String(storedValue.current) : '1Gi');
-          }
+          onChange(
+            checked ? (storedValue.current ? String(storedValue.current) : '1Gi') : undefined,
+            checked,
+          );
         }}
         isDisabled={isDisabled}
         label={
@@ -90,7 +96,7 @@ export const MemoryFieldWithCheckbox: React.FC<MemoryFieldWithCheckboxProps> = (
         }
       />
       <MemoryField
-        onChange={onChange}
+        onChange={(v) => onChange(v, isChecked)}
         value={value}
         validated={validated}
         dataTestId={dataTestId}

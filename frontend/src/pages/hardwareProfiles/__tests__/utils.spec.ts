@@ -3,6 +3,7 @@ import { Identifier, IdentifierResourceType } from '#~/types';
 import {
   determineIdentifierUnit,
   isHardwareProfileIdentifierValid,
+  isHardwareProfileValid,
   validateProfileWarning,
 } from '#~/pages/hardwareProfiles/utils';
 import { HardwareProfileWarningType } from '#~/concepts/hardwareProfiles/types';
@@ -418,5 +419,233 @@ describe('determine unit', () => {
       defaultCount: '2Gi',
     };
     expect(determineIdentifierUnit(nodeUnknownResource)).toEqual(OTHER);
+  });
+});
+
+describe('isHardwareProfileValid', () => {
+  it('should return true for a profile with valid CPU and Memory identifiers', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-valid',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '1',
+          maxCount: '4',
+          defaultCount: '2',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(true);
+  });
+
+  it('should return true for a profile with empty identifiers', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-empty',
+      enabled: true,
+      identifiers: [],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(true);
+  });
+
+  it('should return true for a profile with only GPU identifier', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-gpu-only',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'GPU',
+          identifier: 'nvidia.com/gpu',
+          minCount: '1',
+          maxCount: '4',
+          defaultCount: '1',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(true);
+  });
+
+  it('should return true for a profile with only CPU', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-cpu-only',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '1',
+          maxCount: '4',
+          defaultCount: '2',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(true);
+  });
+
+  it('should return false for a profile with negative values', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-negative',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '-1',
+          maxCount: '4',
+          defaultCount: '2',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
+  });
+
+  it('should return false for a profile with min > max', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-out-of-range',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '10',
+          maxCount: '4',
+          defaultCount: '5',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
+  });
+
+  it('should return false for a profile with decimal values', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-decimal',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '1',
+          maxCount: '4',
+          defaultCount: '2',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1.5Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
+  });
+
+  it('should return false for a profile with default value outside min/max range', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-default-out-of-range',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '1',
+          maxCount: '4',
+          defaultCount: '8',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
+  });
+
+  it('should return false for a profile with both MISSING_CPU_MEMORY and other errors', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-multiple-errors',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'GPU',
+          identifier: 'nvidia.com/gpu',
+          minCount: '-1',
+          maxCount: '4',
+          defaultCount: '1',
+        },
+      ],
+    });
+    // Has both MISSING_CPU_MEMORY (no CPU/Memory) and CANNOT_BE_NEGATIVE (negative minCount)
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
+  });
+
+  it('should return false for a profile with invalid unit', () => {
+    const hardwareProfileMock = mockHardwareProfile({
+      uid: 'test-invalid-unit',
+      enabled: true,
+      identifiers: [
+        {
+          displayName: 'CPU',
+          identifier: 'cpu',
+          resourceType: IdentifierResourceType.CPU,
+          minCount: '1xyz',
+          maxCount: '4',
+          defaultCount: '2',
+        },
+        {
+          displayName: 'Memory',
+          identifier: 'memory',
+          resourceType: IdentifierResourceType.MEMORY,
+          minCount: '1Gi',
+          maxCount: '8Gi',
+          defaultCount: '4Gi',
+        },
+      ],
+    });
+    expect(isHardwareProfileValid(hardwareProfileMock)).toBe(false);
   });
 });

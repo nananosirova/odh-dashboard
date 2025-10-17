@@ -17,11 +17,12 @@ type CPUFieldProps = {
   isDisabled?: boolean;
 };
 
-type CPUFieldWithCheckboxProps = Omit<CPUFieldProps, 'onBlur'> & {
+type CPUFieldWithCheckboxProps = Omit<CPUFieldProps, 'onBlur' | 'onChange'> & {
   checkboxId: string;
   label: string;
   checkboxTooltip?: string;
   zodIssue?: ZodIssue | ZodIssue[];
+  onChange: (newValue: string | undefined, checked: boolean) => void;
 };
 
 const CPUField: React.FC<CPUFieldProps> = ({
@@ -65,6 +66,12 @@ export const CPUFieldWithCheckbox: React.FC<CPUFieldWithCheckboxProps> = ({
   // Store the value when the checkbox is unchecked to restore it when the checkbox is checked again
   const storedValue = React.useRef(value);
 
+  React.useEffect(() => {
+    if (value !== undefined) {
+      storedValue.current = value;
+    }
+  }, [value]);
+
   return (
     <Stack hasGutter>
       <Checkbox
@@ -72,11 +79,10 @@ export const CPUFieldWithCheckbox: React.FC<CPUFieldWithCheckboxProps> = ({
         data-testid={checkboxId}
         isChecked={isChecked}
         onChange={(_, checked) => {
-          if (!checked) {
-            onChange(undefined);
-          } else {
-            onChange(storedValue.current ? String(storedValue.current) : '1');
-          }
+          onChange(
+            checked ? (storedValue.current ? String(storedValue.current) : '1') : undefined,
+            checked,
+          );
         }}
         isDisabled={isDisabled}
         label={
@@ -90,7 +96,7 @@ export const CPUFieldWithCheckbox: React.FC<CPUFieldWithCheckboxProps> = ({
         }
       />
       <CPUField
-        onChange={onChange}
+        onChange={(v) => onChange(v, isChecked)}
         value={value}
         validated={validated}
         dataTestId={dataTestId}

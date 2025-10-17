@@ -55,6 +55,10 @@ export const assembleNotebook = (
     },
     connections,
   } = data;
+  
+  console.log('🚀 assembleNotebook - received resources:', resources);
+  console.log('🚀 assembleNotebook - selectedHardwareProfile:', selectedHardwareProfile?.metadata.name);
+  console.log('🚀 assembleNotebook - resources stringified:', JSON.stringify(resources, null, 2));
   const dashboardNamespace = data.dashboardNamespace ?? '';
   const {
     name: notebookName,
@@ -96,6 +100,7 @@ export const assembleNotebook = (
   }
 
   const isAcceleratorProfileSelected = !!selectedAcceleratorProfile;
+  const isHardwareProfileSelected = !!selectedHardwareProfile;
   const hardwareProfileNamespace: Record<string, string | null> = selectedHardwareProfile
     ? selectedHardwareProfile.metadata.namespace === projectName
       ? { 'opendatahub.io/hardware-profile-namespace': projectName }
@@ -208,8 +213,10 @@ export const assembleNotebook = (
             },
           ],
           volumes,
-          tolerations: isAcceleratorProfileSelected ? tolerations : undefined,
-          nodeSelector: isAcceleratorProfileSelected ? nodeSelector : undefined,
+          tolerations:
+            isAcceleratorProfileSelected || isHardwareProfileSelected ? tolerations : undefined,
+          nodeSelector:
+            isAcceleratorProfileSelected || isHardwareProfileSelected ? nodeSelector : undefined,
         },
       },
     },
@@ -224,6 +231,7 @@ export const assembleNotebook = (
       image.imageStream.metadata.namespace === projectName ? projectName : null;
   }
 
+  console.log('🚀 assembleNotebook - final notebook resources:', JSON.stringify(resource.spec.template.spec.containers[0].resources, null, 2));
   return resource;
 };
 
@@ -285,6 +293,9 @@ export const createNotebook = (
 ): Promise<NotebookKind> =>
   new Promise((resolve, reject) => {
     const notebook = assembleNotebook(data, username, canEnablePipelines);
+    
+    console.log('📤 createNotebook - about to send notebook to k8s with resources:', 
+      JSON.stringify(notebook.spec.template.spec.containers[0].resources, null, 2));
 
     k8sCreateResource<NotebookKind>(
       applyK8sAPIOptions(
@@ -296,6 +307,8 @@ export const createNotebook = (
       ),
     )
       .then((fetchedNotebook) => {
+        console.log('📥 createNotebook - received notebook from k8s with resources:', 
+          JSON.stringify(fetchedNotebook.spec.template.spec.containers[0].resources, null, 2));
         resolve(fetchedNotebook);
       })
       .catch(reject);
@@ -308,6 +321,9 @@ export const updateNotebook = (
   opts?: K8sAPIOptions,
 ): Promise<NotebookKind> => {
   const notebook = assembleNotebook(assignableData, username);
+  console.log('📝 updateNotebook - assembled notebook resources:', 
+    JSON.stringify(notebook.spec.template.spec.containers[0].resources, null, 2));
+  
   const oldNotebook = structuredClone(existingNotebook);
   const container = oldNotebook.spec.template.spec.containers[0];
 
@@ -319,11 +335,15 @@ export const updateNotebook = (
   oldNotebook.spec.template.spec.nodeSelector = {};
   container.resources = {};
 
+  const mergedNotebook = _.merge({}, oldNotebook, notebook);
+  console.log('📝 updateNotebook - merged notebook resources:', 
+    JSON.stringify(mergedNotebook.spec.template.spec.containers[0].resources, null, 2));
+
   return k8sUpdateResource<NotebookKind>(
     applyK8sAPIOptions(
       {
         model: NotebookModel,
-        resource: _.merge({}, oldNotebook, notebook),
+        resource: mergedNotebook,
       },
       opts,
     ),

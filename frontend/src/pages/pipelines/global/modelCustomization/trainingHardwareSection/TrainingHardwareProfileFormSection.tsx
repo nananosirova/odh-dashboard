@@ -135,8 +135,23 @@ const TrainingHardwareProfileFormSection: React.FC<TrainingHardwareProfileFormSe
                 hardwareValidationPath={['hardware', 'hardwareProfileConfig']}
                 hideLimitOption
                 identifiers={data.selectedProfile.spec.identifiers}
-                data={data.resources}
-                setData={(newData: ContainerResources) => setData('resources', newData)}
+                data={{
+                  resources: data.resources ?? { requests: {}, limits: {} },
+                  uncheckedIdentifiers: data.uncheckedIdentifiers ?? {
+                    requests: {},
+                    limits: {},
+                  },
+                }}
+                setData={(
+                  newData: ContainerResources,
+                  newUncheckedIdentifiers?: {
+                    requests: { [key: string]: boolean };
+                    limits: { [key: string]: boolean };
+                  },
+                ) => {
+                  setData('resources', newData);
+                  setData('uncheckedIdentifiers', newUncheckedIdentifiers);
+                }}
               />
             </ExpandableSection>
           </StackItem>

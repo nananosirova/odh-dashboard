@@ -19,6 +19,10 @@ export type HardwareProfileConfig = {
   selectedProfile?: HardwareProfileKind;
   useExistingSettings: boolean;
   resources?: ContainerResources;
+  uncheckedIdentifiers?: {
+    requests: { [key: string]: boolean };
+    limits: { [key: string]: boolean };
+  };
 };
 
 export type UseHardwareProfileConfigResult = {
@@ -121,6 +125,7 @@ export const useHardwareProfileConfig = (
   const [formData, setFormData, resetFormData] = useGenericObjectState<HardwareProfileConfig>({
     selectedProfile: undefined,
     useExistingSettings: false,
+    uncheckedIdentifiers: { requests: {}, limits: {} },
   });
 
   let profiles = dashboardProfiles;
@@ -147,6 +152,7 @@ export const useHardwareProfileConfig = (
       let selectedProfile: HardwareProfileKind | undefined;
 
       // if editing, try to select existing profile
+      console.log(resources);
       if (resources) {
         // try to match to existing profile
         if (existingHardwareProfileName) {
@@ -172,17 +178,66 @@ export const useHardwareProfileConfig = (
         setFormData('resources', mergedResources);
         setFormData('useExistingSettings', !selectedProfile);
         setFormData('selectedProfile', selectedProfile);
-      }
 
-      // if not editing existing profile, select the first enabled profile
-      else {
+        const allKeys = new Set(
+          selectedProfile?.spec.identifiers?.map((id) => id.identifier) || [],
+        );
+
+        const test = {
+          requests: Array.from(allKeys).reduce((acc: Record<string, boolean>, key) => {
+            acc[key] = key in (resources.requests || {});
+            return acc;
+          }, {}),
+          limits: Array.from(allKeys).reduce((acc: Record<string, boolean>, key) => {
+            acc[key] = key in (resources.limits || {});
+            return acc;
+          }, {}),
+        };
+
+        setFormData('uncheckedIdentifiers', test);
+
+        console.log(test);
+      } else {
         const filteredProfiles = filterProfilesByKueue(
           profiles.filter(isHardwareProfileEnabled),
           kueueFilteringState,
         );
         selectedProfile = filteredProfiles.length > 0 ? filteredProfiles[0] : undefined;
         if (selectedProfile) {
-          setFormData('resources', getContainerResourcesFromHardwareProfile(selectedProfile));
+          const hwpResources = getContainerResourcesFromHardwareProfile(selectedProfile);
+          setFormData('uncheckedIdentifiers', {
+            requests: Object.keys(hwpResources.requests || {}).reduce(
+              (acc: Record<string, boolean>, key) => {
+                acc[key] = true;
+                return acc;
+              },
+              {},
+            ),
+            limits: Object.keys(hwpResources.limits || {}).reduce(
+              (acc: Record<string, boolean>, key) => {
+                acc[key] = true;
+                return acc;
+              },
+              {},
+            ),
+          });
+          console.log('ELSE', {
+            requests: Object.keys(hwpResources.requests || {}).reduce(
+              (acc: Record<string, boolean>, key) => {
+                acc[key] = true;
+                return acc;
+              },
+              {},
+            ),
+            limits: Object.keys(hwpResources.limits || {}).reduce(
+              (acc: Record<string, boolean>, key) => {
+                acc[key] = true;
+                return acc;
+              },
+              {},
+            ),
+          });
+          setFormData('resources', hwpResources);
           setFormData('selectedProfile', selectedProfile);
         }
       }

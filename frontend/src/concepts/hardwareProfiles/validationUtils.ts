@@ -18,13 +18,20 @@ export enum ValidationErrorCodes {
 }
 
 export type ResourceSchema = z.ZodEffects<
-  z.ZodUnion<[z.ZodString, z.ZodNumber]>,
-  string | number,
-  string | number
+  z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodUndefined]>,
+  string | number | undefined,
+  string | number | undefined
 >;
 
-export const createCpuSchema = (minCount: ValueUnitCPU, maxCount?: ValueUnitCPU): ResourceSchema =>
-  z.union([z.string(), z.number()]).superRefine((val, ctx) => {
+export const createCpuSchema = (
+  minCount: ValueUnitCPU,
+  maxCount?: ValueUnitCPU,
+  checked = true,
+): ResourceSchema =>
+  z.union([z.string(), z.number(), z.undefined()]).superRefine((val, ctx) => {
+    if (val === undefined && !checked) {
+      return;
+    }
     const stringVal = String(val);
     const [value] = splitValueUnit(stringVal, CPU_UNITS);
     if (value === undefined) {
@@ -50,8 +57,12 @@ export const createCpuSchema = (minCount: ValueUnitCPU, maxCount?: ValueUnitCPU)
 export const createMemorySchema = (
   minCount: ValueUnitString,
   maxCount: ValueUnitString,
+  checked: boolean,
 ): ResourceSchema =>
-  z.union([z.string(), z.number()]).superRefine((val, ctx) => {
+  z.union([z.string(), z.number(), z.undefined()]).superRefine((val, ctx) => {
+    if (val === undefined && !checked) {
+      return;
+    }
     const stringVal = String(val);
     const [value] = splitValueUnit(stringVal, MEMORY_UNITS_FOR_PARSING);
     if (value === undefined) {
@@ -74,8 +85,15 @@ export const createMemorySchema = (
     }
   });
 
-export const createNumericSchema = (minCount: number, maxCount: number): ResourceSchema =>
-  z.union([z.string(), z.number()]).superRefine((val, ctx) => {
+export const createNumericSchema = (
+  minCount: number,
+  maxCount: number,
+  checked: boolean,
+): ResourceSchema =>
+  z.union([z.string(), z.number(), z.undefined()]).superRefine((val, ctx) => {
+    if (val === undefined && !checked) {
+      return;
+    }
     const value = Number(val);
     if (Number.isNaN(value)) {
       ctx.addIssue({
@@ -108,32 +126,66 @@ export const hardwareProfileValidationSchema = z
   .object({
     selectedProfile: z.custom<HardwareProfileKind>().optional(),
     resources: z.object({
-      requests: z.record(z.union([z.string(), z.number(), z.undefined()])),
-      limits: z.record(z.union([z.string(), z.number(), z.undefined()])),
+      requests: z.record(z.union([z.string(), z.number(), z.undefined()])).optional(),
+      limits: z.record(z.union([z.string(), z.number(), z.undefined()])).optional(),
     }),
     useExistingSettings: z.boolean(),
+    uncheckedIdentifiers: z
+      .object({
+        requests: z.record(z.boolean()),
+        limits: z.record(z.boolean()),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.selectedProfile?.spec.identifiers) {
       return;
     }
+    const { uncheckedIdentifiers } = data;
 
     data.selectedProfile.spec.identifiers.forEach((identifier) => {
-      let schema: ResourceSchema;
+      const request = data.resources.requests?.[identifier.identifier];
+      const limit = data.resources.limits?.[identifier.identifier];
+
+      const isRequestChecked = uncheckedIdentifiers
+        ? uncheckedIdentifiers.requests[identifier.identifier] ?? false
+        : request !== undefined;
+      const isLimitChecked = uncheckedIdentifiers
+        ? uncheckedIdentifiers.limits[identifier.identifier] ?? false
+        : limit !== undefined;
+
+      let requestSchema: ResourceSchema;
+      let limitSchema: ResourceSchema;
+
       if (identifier.identifier === 'cpu') {
-        schema = createCpuSchema(identifier.minCount, identifier.maxCount);
+        requestSchema = createCpuSchema(identifier.minCount, identifier.maxCount, isRequestChecked);
+        limitSchema = createCpuSchema(identifier.minCount, identifier.maxCount, isLimitChecked);
       } else if (identifier.identifier === 'memory') {
-        schema = createMemorySchema(String(identifier.minCount), String(identifier.maxCount));
+        requestSchema = createMemorySchema(
+          String(identifier.minCount),
+          String(identifier.maxCount),
+          isRequestChecked,
+        );
+        limitSchema = createMemorySchema(
+          String(identifier.minCount),
+          String(identifier.maxCount),
+          isLimitChecked,
+        );
       } else {
-        schema = createNumericSchema(Number(identifier.minCount), Number(identifier.maxCount));
+        requestSchema = createNumericSchema(
+          Number(identifier.minCount),
+          Number(identifier.maxCount),
+          isRequestChecked,
+        );
+        limitSchema = createNumericSchema(
+          Number(identifier.minCount),
+          Number(identifier.maxCount),
+          isLimitChecked,
+        );
       }
 
-      const request = data.resources.requests[identifier.identifier];
-      const limit = data.resources.limits[identifier.identifier];
-
-      // Validate against the schema
-      const requestResult = schema.safeParse(request);
-      const limitResult = schema.safeParse(limit);
+      const requestResult = requestSchema.safeParse(request);
+      const limitResult = limitSchema.safeParse(limit);
 
       if (!requestResult.success) {
         ctx.addIssue({
@@ -151,13 +203,19 @@ export const hardwareProfileValidationSchema = z
         });
       }
 
+      const isUndefinedOkay =
+        (isRequestChecked && !isLimitChecked) || (!isRequestChecked && !isLimitChecked);
+
+      // console.log('isUndefinedOkay', isUndefinedOkay);
+      // console.log('isRequestChecked', isRequestChecked);
+      // console.log('isLimitChecked', isLimitChecked);
       if (requestResult.success && limitResult.success) {
         const isValid =
           identifier.identifier === 'cpu'
-            ? isCpuLimitLarger(request, limit, true)
+            ? isCpuLimitLarger(request, limit, true, isUndefinedOkay)
             : identifier.identifier === 'memory'
-            ? isMemoryLimitLarger(String(request), String(limit), true)
-            : Number(limit) >= Number(request);
+            ? isMemoryLimitLarger(String(request), String(limit), true, isUndefinedOkay)
+            : Number(limit) >= Number(request) || isUndefinedOkay;
 
         if (!isValid) {
           ctx.addIssue({
@@ -172,10 +230,6 @@ export const hardwareProfileValidationSchema = z
   });
 
 export const isHardwareProfileConfigValid = (data: HardwareProfileConfig): boolean => {
-  // if no resources, and not using existing settings, then not valid
-  if (!data.useExistingSettings && !data.resources) {
-    return false;
-  }
   const result = hardwareProfileValidationSchema.safeParse(data);
   return result.success;
 };

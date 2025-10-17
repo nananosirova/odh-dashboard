@@ -1,4 +1,5 @@
 import type { ContainerResources } from '#~/types';
+import type { ProfileIdentifierType } from '#~/concepts/hardwareProfiles/types';
 import { Contextual } from './Contextual';
 
 class HardwareProfileGroup extends Contextual<HTMLElement> {}
@@ -40,6 +41,10 @@ export class HardwareProfileSection {
     return cy.findByTestId('hardware-profile-details-popover');
   }
 
+  findCustomizeSection(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId('hardware-profile-customize');
+  }
+
   findCustomizeButton(): Cypress.Chainable<JQuery<HTMLElement>> {
     return cy.findByTestId('hardware-profile-customize').findByRole('button', {
       name: 'Customize resource requests and limits',
@@ -48,6 +53,62 @@ export class HardwareProfileSection {
 
   findCustomizeForm(): Cypress.Chainable<JQuery<HTMLElement>> {
     return cy.findByTestId('hardware-profile-customize-form');
+  }
+
+  findCPURequestsCheckbox(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`cpu-requests-checkbox`);
+  }
+
+  findCPULimitsCheckbox(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`cpu-limits-checkbox`);
+  }
+
+  findMemoryRequestsCheckbox(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`memory-requests-checkbox`);
+  }
+
+  findMemoryLimitsCheckbox(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`memory-limits-checkbox`);
+  }
+
+  findGPURequestsCheckbox(identifier = 'nvidia.com/gpu'): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`${identifier}-requests-checkbox`);
+  }
+
+  findGPULimitsCheckbox(identifier = 'nvidia.com/gpu'): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`${identifier}-limits-checkbox`);
+  }
+
+  findGPURequestsInput(identifier = 'nvidia.com/gpu'): Cypress.Chainable<JQuery<HTMLInputElement>> {
+    return this.findCustomizeForm().findByTestId(`${identifier}-requests`).find('input');
+  }
+
+  findGPULimitsInput(identifier = 'nvidia.com/gpu'): Cypress.Chainable<JQuery<HTMLInputElement>> {
+    return this.findCustomizeForm().findByTestId(`${identifier}-limits`).find('input');
+  }
+
+  findRequestsLimitsInfoButton(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId('requests-limits-info-button');
+  }
+
+  findRequestsLimitsPopover(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByRole('dialog', { name: 'Requests and Limits' });
+  }
+
+  findResourceCheckbox(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+  ): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByTestId(`${resourceType}-${type}-checkbox`);
+  }
+
+  findResourceUnit(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+  ): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.findResourceCheckbox(resourceType, type)
+      .closest('.pf-v6-l-stack')
+      .findByTestId('value-unit-select');
   }
 
   findCPURequestsInput(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -72,9 +133,7 @@ export class HardwareProfileSection {
   }
 
   selectPotentiallyDisabledProfile(profileDisplayName: string, profileName?: string): void {
-    const dropdown = this.findSelect();
-
-    dropdown.then(($el) => {
+    this.findSelect().then(($el) => {
       if ($el.prop('disabled')) {
         // If disabled, verify it contains the base profile name
         // Use the shorter profileName if provided, otherwise use profileDisplayName
@@ -83,7 +142,7 @@ export class HardwareProfileSection {
         cy.log(`Dropdown is disabled with value: ${nameToCheck}`);
       } else {
         // If enabled, proceed with selection as before using the full display name
-        dropdown.click();
+        this.findSelect().click();
         cy.findByRole('option', { name: profileDisplayName }).click();
       }
     });
@@ -148,6 +207,48 @@ export class HardwareProfileSection {
         cy.findByText(errorMessage).should('exist');
       }
     });
+  }
+
+  setResourceValue(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+    value: string,
+  ): void {
+    this.verifyResourceValidation(`${resourceType}-${type}`, value);
+  }
+
+  verifyResourceCheckboxState(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+    checked: boolean,
+    disabled?: boolean,
+  ): void {
+    this.findResourceCheckbox(resourceType, type)
+      .should(checked ? 'be.checked' : 'not.be.checked')
+      .then(($el) => {
+        if (disabled !== undefined) {
+          cy.wrap($el).should(disabled ? 'be.disabled' : 'not.be.disabled');
+        }
+      });
+  }
+
+  selectResourceUnit(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+    unit: 'Gi' | 'Mi' | 'Ki',
+  ): void {
+    this.findResourceUnit(resourceType, type).click();
+
+    // Select the desired unit from the dropdown using the key
+    cy.findByRole('menuitem', { name: `${unit}B` }).click();
+  }
+
+  verifyResourceUnit(
+    resourceType: 'cpu' | 'memory',
+    type: ProfileIdentifierType,
+    expectedUnit: 'Gi' | 'Mi',
+  ): void {
+    this.findResourceUnit(resourceType, type).should('contain.text', expectedUnit);
   }
 }
 
