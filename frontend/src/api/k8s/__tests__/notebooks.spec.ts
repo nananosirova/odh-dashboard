@@ -211,7 +211,7 @@ describe('assembleNotebook', () => {
           },
         },
       },
-      podSpecOptions: {},
+      hardwareProfileOptions: mockStartNotebookData({}).hardwareProfileOptions,
     };
     const result = assembleNotebook(notebookData, 'test-user');
     expect(result.metadata.annotations?.['notebooks.opendatahub.io/last-image-selection']).toBe(
@@ -298,7 +298,8 @@ describe('assembleNotebook', () => {
     const notebookData = mockStartNotebookData({});
     const hardwareProfile = mockHardwareProfile({ name: 'real-profile' });
     hardwareProfile.metadata.uid = 'test-uid';
-    notebookData.podSpecOptions.selectedHardwareProfile = hardwareProfile;
+    notebookData.hardwareProfileOptions.podSpecOptionsState.podSpecOptions.selectedHardwareProfile =
+      hardwareProfile;
     const result = assembleNotebook(notebookData, 'test-user');
     expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-name']).toBe(
       'real-profile',
@@ -309,7 +310,8 @@ describe('assembleNotebook', () => {
     const notebookData = mockStartNotebookData({});
     const hardwareProfile = mockHardwareProfile({ schedulingType: '' });
     hardwareProfile.metadata.uid = 'test-uid';
-    notebookData.podSpecOptions.selectedHardwareProfile = hardwareProfile;
+    notebookData.hardwareProfileOptions.podSpecOptionsState.podSpecOptions.selectedHardwareProfile =
+      hardwareProfile;
     const result = assembleNotebook(notebookData, 'test-user');
     expect(result.spec.template.spec.tolerations).toStrictEqual([]);
     expect(result.spec.template.spec.nodeSelector).toStrictEqual({});
@@ -319,7 +321,8 @@ describe('assembleNotebook', () => {
     const notebookData = mockStartNotebookData({});
     const hardwareProfile = mockHardwareProfile({ name: 'real-profile' });
     hardwareProfile.metadata.uid = 'test-uid';
-    notebookData.podSpecOptions.selectedHardwareProfile = hardwareProfile;
+    notebookData.hardwareProfileOptions.podSpecOptionsState.podSpecOptions.selectedHardwareProfile =
+      hardwareProfile;
     const result = assembleNotebook(notebookData, 'test-user');
     expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-namespace']).toBe(
       'opendatahub',

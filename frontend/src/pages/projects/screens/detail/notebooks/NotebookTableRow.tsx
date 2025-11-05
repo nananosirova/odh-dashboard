@@ -5,13 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { InfoCircleIcon } from '@patternfly/react-icons';
 import { NotebookState } from '#~/pages/projects/notebook/types';
 import NotebookRouteLink from '#~/pages/projects/notebook/NotebookRouteLink';
-import { NotebookKind } from '#~/k8sTypes';
+import { HardwareProfileFeatureVisibility, NotebookKind } from '#~/k8sTypes';
 import NotebookImagePackageDetails from '#~/pages/projects/notebook/NotebookImagePackageDetails';
 import { ProjectDetailsContext } from '#~/pages/projects/ProjectDetailsContext';
 import { TableRowTitleDescription } from '#~/components/table';
 import DashboardPopupIconButton from '#~/concepts/dashboard/DashboardPopupIconButton';
 import { getDescriptionFromK8sResource } from '#~/concepts/k8s/utils';
-import { NotebookSize } from '#~/types';
 import NotebookStateStatus from '#~/pages/projects/notebook/NotebookStateStatus';
 import { NotebookActionsColumn } from '#~/pages/projects/notebook/NotebookActionsColumn';
 import { startNotebook, stopNotebook } from '#~/api';
@@ -19,17 +18,21 @@ import { currentlyHasPipelines } from '#~/concepts/pipelines/elyra/utils';
 import { fireNotebookTrackingEvent } from '#~/pages/projects/notebook/utils';
 import useStopNotebookModalAvailability from '#~/pages/projects/notebook/useStopNotebookModalAvailability';
 import StopNotebookConfirmModal from '#~/pages/projects/notebook/StopNotebookConfirmModal';
-import { useNotebookKindPodSpecOptionsState } from '#~/concepts/hardwareProfiles/useNotebookPodSpecOptionsState';
 import HardwareProfileTableColumn from '#~/concepts/hardwareProfiles/HardwareProfileTableColumn';
 import StateActionToggle from '#~/components/StateActionToggle';
 import { useHardwareProfileBindingState } from '#~/concepts/hardwareProfiles/useHardwareProfileBindingState';
-import { getDeletedHardwareProfilePatches } from '#~/concepts/hardwareProfiles/utils';
+import {
+  getDeletedHardwareProfilePatches,
+  getExistingResources,
+} from '#~/concepts/hardwareProfiles/utils';
+import { NOTEBOOK_HARDWARE_PROFILE_PATHS } from '#~/concepts/notebooks/const.ts';
+import { getNotebookResourcesPath } from '#~/concepts/notebooks/utils.ts';
+import { useAssignHardwareProfile } from '#~/concepts/hardwareProfiles/useAssignHardwareProfile.ts';
 import { NotebookImageStatus } from './const';
 import { NotebookImageDisplayName } from './NotebookImageDisplayName';
 import NotebookStorageBars from './NotebookStorageBars';
 import NotebookSizeDetails from './NotebookSizeDetails';
 import useNotebookImage from './useNotebookImage';
-import useNotebookDeploymentSize from './useNotebookDeploymentSize';
 import NotebookUpdateImageModal from './NotebookUpdateImageModal';
 
 type NotebookTableRowProps = {
@@ -50,18 +53,26 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
   const { currentProject } = React.useContext(ProjectDetailsContext);
   const navigate = useNavigate();
   const [isExpanded, setExpanded] = React.useState(false);
-  const { size: notebookSize } = useNotebookDeploymentSize(obj.notebook);
-
-  const lastDeployedSize: NotebookSize = {
-    name: 'Custom',
-    resources: obj.notebook.spec.template.spec.containers[0].resources ?? {
-      limits: {},
-      requests: {},
-    },
-  };
   const [notebookImage, loaded, loadError] = useNotebookImage(obj.notebook);
 
-  const podSpecOptionsState = useNotebookKindPodSpecOptionsState(obj.notebook);
+  const paths = React.useMemo(
+    () => ({
+      ...NOTEBOOK_HARDWARE_PROFILE_PATHS,
+      resourcesPath: getNotebookResourcesPath(obj.notebook),
+    }),
+    [obj.notebook],
+  );
+
+  const { podSpecOptionsState } = useAssignHardwareProfile(obj.notebook, {
+    visibleIn: [HardwareProfileFeatureVisibility.WORKBENCH],
+    paths,
+  });
+
+  const { existingContainerResources: notebookContainerSize } = getExistingResources(
+    obj.notebook,
+    paths,
+  );
+
   const [dontShowModalValue] = useStopNotebookModalAvailability();
   const [isOpenConfirm, setOpenConfirm] = React.useState(false);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -251,7 +262,7 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
         </Td>
         <Td dataLabel="Limits">
           <ExpandableRowContent>
-            <NotebookSizeDetails notebookSize={notebookSize || lastDeployedSize} />
+            <NotebookSizeDetails notebookContainerSize={notebookContainerSize} />
           </ExpandableRowContent>
         </Td>
         <Td />
