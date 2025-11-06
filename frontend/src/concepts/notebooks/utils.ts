@@ -33,7 +33,7 @@ export const useNotebookHardwareProfile = <T extends NotebookKind | Notebook>(
   const paths = React.useMemo(
     () => ({
       ...NOTEBOOK_HARDWARE_PROFILE_PATHS,
-      resourcesPath: getNotebookResourcesPath(notebook),
+      containerResourcesPath: getNotebookResourcesPath(notebook),
     }),
     [notebook],
   );

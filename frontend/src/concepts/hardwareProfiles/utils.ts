@@ -220,13 +220,13 @@ export const getExistingResources = <T extends K8sResourceCommon>(
   cr: T | null | undefined,
   paths: CrPathConfig,
 ): {
-  existingContainerResources: ContainerResources;
-  existingTolerations: Toleration[];
-  existingNodeSelector: NodeSelector;
+  existingContainerResources?: ContainerResources;
+  existingTolerations?: Toleration[];
+  existingNodeSelector?: NodeSelector;
 } => {
-  const existingResources: ContainerResources = get(cr, paths.containerResourcesPath);
-  const existingTolerations: Toleration[] = get(cr, paths.tolerationsPath);
-  const existingNodeSelector: NodeSelector = get(cr, paths.nodeSelectorPath);
+  const existingResources: ContainerResources | undefined = get(cr, paths.containerResourcesPath);
+  const existingTolerations: Toleration[] | undefined = get(cr, paths.tolerationsPath);
+  const existingNodeSelector: NodeSelector | undefined = get(cr, paths.nodeSelectorPath);
   return {
     existingContainerResources: existingResources,
     existingTolerations,
@@ -251,9 +251,9 @@ export const getExistingHardwareProfileData = <T extends K8sResourceCommon>(
 export const assemblePodSpecOptions = (
   hardwareProfileConfig: UseHardwareProfileConfigResult,
   existingResources?: {
-    existingContainerResources: ContainerResources;
-    existingTolerations: Toleration[];
-    existingNodeSelector: NodeSelector;
+    existingContainerResources?: ContainerResources;
+    existingTolerations?: Toleration[];
+    existingNodeSelector?: NodeSelector;
   },
 ): HardwarePodSpecOptions => {
   const {

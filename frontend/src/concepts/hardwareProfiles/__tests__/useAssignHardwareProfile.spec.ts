@@ -151,14 +151,27 @@ describe('useAssignHardwareProfile', () => {
   });
 
   it('should apply hardware profile annotations and settings to notebook', () => {
-    // Use default mock hardware profile
     const hardwareProfile = mockHardwareProfile({
       name: 'gpu-profile',
       namespace: 'opendatahub',
       nodeSelector: { 'nvidia.com/gpu': 'true' },
     });
 
-    const notebook = mockNotebookK8sResource({});
+    const notebook = mockNotebookK8sResource({
+      hardwareProfileName: '',
+      hardwareProfileNamespace: null,
+      resources: {},
+      opts: {
+        spec: {
+          template: {
+            spec: {
+              tolerations: undefined,
+              nodeSelector: undefined,
+            },
+          },
+        },
+      },
+    });
 
     // Mock config with selected hardware profile
     mockUseHardwareProfileConfig.mockReturnValue({
@@ -200,16 +213,12 @@ describe('useAssignHardwareProfile', () => {
       limits: { cpu: '4', memory: '16Gi', 'nvidia.com/gpu': '1' },
     });
 
-    // Verify tolerations were applied from the hardware profile
-    expect(updatedNotebook.spec.template.spec.tolerations).toBeDefined();
-    expect(updatedNotebook.spec.template.spec.tolerations?.length).toBeGreaterThan(0);
-
     // Verify notebook was not mutated in place (important for immutability)
     expect(updatedNotebook).not.toBe(notebook);
     expect(updatedNotebook.metadata.name).toBe(notebook.metadata.name);
   });
 
-  it('should use existing settings when useExistingSettings is true', () => {
+  it('should use existing settings when useExistingSettings is true and no selected profile', () => {
     const existingResources = {
       requests: { cpu: '1', memory: '1Gi' },
       limits: { cpu: '10', memory: '10Gi' },

@@ -10,11 +10,11 @@ import { ContainerResources } from '#~/types';
 import { formatMemory } from '#~/utilities/valueUnits';
 
 type NotebookSizeDetailsProps = {
-  notebookContainerSize: ContainerResources;
+  notebookContainerSize?: ContainerResources;
 };
 
 const NotebookSizeDetails: React.FC<NotebookSizeDetailsProps> = ({ notebookContainerSize }) => {
-  const { requests, limits } = notebookContainerSize;
+  const { requests, limits } = notebookContainerSize || {};
 
   return (
     <DescriptionList>

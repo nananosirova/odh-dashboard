@@ -58,7 +58,7 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
   const paths = React.useMemo(
     () => ({
       ...NOTEBOOK_HARDWARE_PROFILE_PATHS,
-      resourcesPath: getNotebookResourcesPath(obj.notebook),
+      containerResourcesPath: getNotebookResourcesPath(obj.notebook),
     }),
     [obj.notebook],
   );

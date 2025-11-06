@@ -14,7 +14,16 @@ type MockHardwareProfileOptionsConfig = {
 
 export const mockUseAssignHardwareProfileResult = <T extends K8sResourceCommon>({
   selectedHardwareProfile,
-  resources,
+  resources = {
+    requests: {
+      memory: '2Gi',
+      cpu: '500m',
+    },
+    limits: {
+      memory: '2Gi',
+      cpu: '500m',
+    },
+  },
   tolerations = [],
   nodeSelector = {},
 }: MockHardwareProfileOptionsConfig = {}): UseAssignHardwareProfileResult<T> => {

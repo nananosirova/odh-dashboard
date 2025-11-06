@@ -246,7 +246,8 @@ describe('getExistingResources', () => {
 
     // Use toMatchObject to allow for additional default fields from mock
     expect(result.existingTolerations).toMatchObject(tolerations);
-    expect(result.existingTolerations.length).toBe(2);
+    expect(result.existingTolerations).toBeDefined();
+    expect(result.existingTolerations?.length).toBe(2);
   });
 
   it('should extract nodeSelector from notebook', () => {
