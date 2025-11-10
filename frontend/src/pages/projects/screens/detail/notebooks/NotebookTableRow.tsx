@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { InfoCircleIcon } from '@patternfly/react-icons';
 import { NotebookState } from '#~/pages/projects/notebook/types';
 import NotebookRouteLink from '#~/pages/projects/notebook/NotebookRouteLink';
-import { HardwareProfileFeatureVisibility, NotebookKind } from '#~/k8sTypes';
+import { NotebookKind } from '#~/k8sTypes';
 import NotebookImagePackageDetails from '#~/pages/projects/notebook/NotebookImagePackageDetails';
 import { ProjectDetailsContext } from '#~/pages/projects/ProjectDetailsContext';
 import { TableRowTitleDescription } from '#~/components/table';
@@ -20,14 +20,10 @@ import useStopNotebookModalAvailability from '#~/pages/projects/notebook/useStop
 import StopNotebookConfirmModal from '#~/pages/projects/notebook/StopNotebookConfirmModal';
 import HardwareProfileTableColumn from '#~/concepts/hardwareProfiles/HardwareProfileTableColumn';
 import StateActionToggle from '#~/components/StateActionToggle';
+import { useNotebookHardwareProfile } from '#~/concepts/notebooks/utils';
+import { UseAssignHardwareProfileResult } from '#~/concepts/hardwareProfiles/useAssignHardwareProfile';
 import { useHardwareProfileBindingState } from '#~/concepts/hardwareProfiles/useHardwareProfileBindingState';
-import {
-  getDeletedHardwareProfilePatches,
-  getExistingResources,
-} from '#~/concepts/hardwareProfiles/utils';
-import { NOTEBOOK_HARDWARE_PROFILE_PATHS } from '#~/concepts/notebooks/const.ts';
-import { getNotebookResourcesPath } from '#~/concepts/notebooks/utils.ts';
-import { useAssignHardwareProfile } from '#~/concepts/hardwareProfiles/useAssignHardwareProfile.ts';
+import { getDeletedHardwareProfilePatches } from '#~/concepts/hardwareProfiles/utils';
 import { NotebookImageStatus } from './const';
 import { NotebookImageDisplayName } from './NotebookImageDisplayName';
 import NotebookStorageBars from './NotebookStorageBars';
@@ -55,23 +51,9 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
   const [isExpanded, setExpanded] = React.useState(false);
   const [notebookImage, loaded, loadError] = useNotebookImage(obj.notebook);
 
-  const paths = React.useMemo(
-    () => ({
-      ...NOTEBOOK_HARDWARE_PROFILE_PATHS,
-      containerResourcesPath: getNotebookResourcesPath(obj.notebook),
-    }),
-    [obj.notebook],
-  );
-
-  const { podSpecOptionsState } = useAssignHardwareProfile(obj.notebook, {
-    visibleIn: [HardwareProfileFeatureVisibility.WORKBENCH],
-    paths,
-  });
-
-  const { existingContainerResources: notebookContainerSize } = getExistingResources(
-    obj.notebook,
-    paths,
-  );
+  const hardwareProfileOptions: UseAssignHardwareProfileResult<NotebookKind> =
+    useNotebookHardwareProfile(obj.notebook);
+  const { podSpecOptionsState } = hardwareProfileOptions;
 
   const [dontShowModalValue] = useStopNotebookModalAvailability();
   const [isOpenConfirm, setOpenConfirm] = React.useState(false);
@@ -262,7 +244,9 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
         </Td>
         <Td dataLabel="Limits">
           <ExpandableRowContent>
-            <NotebookSizeDetails notebookContainerSize={notebookContainerSize} />
+            <NotebookSizeDetails
+              notebookContainerSize={podSpecOptionsState.podSpecOptions.resources}
+            />
           </ExpandableRowContent>
         </Td>
         <Td />

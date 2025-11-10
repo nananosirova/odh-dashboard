@@ -26,11 +26,7 @@ export type UseAssignHardwareProfileResult<T extends K8sResourceCommon> = {
 export const useAssignHardwareProfile = <T extends K8sResourceCommon>(
   cr: T | null | undefined,
   hardwareProfileOptions: HardwareProfileOptions,
-): {
-  podSpecOptionsState: HardwarePodSpecOptionsState<HardwarePodSpecOptions>;
-  applyToResource: (resource: T) => T;
-  validateHardwareProfileForm: () => boolean;
-} => {
+): UseAssignHardwareProfileResult<T> => {
   const { visibleIn, paths } = hardwareProfileOptions;
   const { name: hwpName, namespace: hwpNamespace } = getExistingHardwareProfileData(cr);
   const existingResources = getExistingResources(cr, paths);
