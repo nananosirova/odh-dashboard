@@ -24,6 +24,7 @@ import { useNotebookHardwareProfile } from '#~/concepts/notebooks/utils';
 import { UseAssignHardwareProfileResult } from '#~/concepts/hardwareProfiles/useAssignHardwareProfile';
 import { useHardwareProfileBindingState } from '#~/concepts/hardwareProfiles/useHardwareProfileBindingState';
 import { getDeletedHardwareProfilePatches } from '#~/concepts/hardwareProfiles/utils';
+import { HardwareProfileBindingState } from '#~/concepts/hardwareProfiles/const';
 import { NotebookImageStatus } from './const';
 import { NotebookImageDisplayName } from './NotebookImageDisplayName';
 import NotebookStorageBars from './NotebookStorageBars';
@@ -63,6 +64,10 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
   const { name: notebookName, namespace: notebookNamespace } = obj.notebook.metadata;
   const [bindingStateInfo, bindingStateLoaded, bindingStateLoadError] =
     useHardwareProfileBindingState(obj.notebook);
+
+  // Prevent starting notebook if hardware profile is disabled
+  const isHardwareProfileDisabled =
+    bindingStateInfo?.state === HardwareProfileBindingState.DISABLED;
 
   const onStart = React.useCallback(() => {
     setInProgress(true);
@@ -215,7 +220,7 @@ const NotebookTableRow: React.FC<NotebookTableRowProps> = ({
             currentState={obj}
             onStart={onStart}
             onStop={onStop}
-            isDisabled={inProgress}
+            isDisabled={inProgress || isHardwareProfileDisabled}
           />
         </Td>
         <Td isActionCell>

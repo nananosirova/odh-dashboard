@@ -14,6 +14,7 @@ import { currentlyHasPipelines } from '#~/concepts/pipelines/elyra/utils.ts';
 import { useNotebookHardwareProfile } from '#~/concepts/notebooks/utils.ts';
 import { useHardwareProfileBindingState } from '#~/concepts/hardwareProfiles/useHardwareProfileBindingState';
 import { getDeletedHardwareProfilePatches } from '#~/concepts/hardwareProfiles/utils';
+import { HardwareProfileBindingState } from '#~/concepts/hardwareProfiles/const';
 
 type ProjectTableRowNotebookTableRowProps = {
   project: ProjectKind;
@@ -34,6 +35,10 @@ const ProjectTableRowNotebookTableRow: React.FC<ProjectTableRowNotebookTableRowP
   const [inProgress, setInProgress] = React.useState(false);
   const { name: notebookName, namespace: notebookNamespace } = notebook.metadata;
   const [hardwareProfileBindingState] = useHardwareProfileBindingState(notebook);
+
+  // Prevent starting notebook if hardware profile is disabled
+  const isHardwareProfileDisabled =
+    hardwareProfileBindingState?.state === HardwareProfileBindingState.DISABLED;
 
   const onStart = React.useCallback(() => {
     setInProgress(true);
@@ -95,7 +100,7 @@ const ProjectTableRowNotebookTableRow: React.FC<ProjectTableRowNotebookTableRowP
           currentState={notebookState}
           onStart={onStart}
           onStop={onStop}
-          isDisabled={inProgress}
+          isDisabled={inProgress || isHardwareProfileDisabled}
         />
       </Td>
       <Td isActionCell>
