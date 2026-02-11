@@ -14,7 +14,11 @@ import {
   aiAssetsRootPath,
   globChatPlaygroundAll,
   globAiAssetsAll,
+  promptManagementRootPath,
+  globPromptManagementAll,
 } from '~/app/utilities/routes';
+
+import PromptManagementPage from '~/app/PromptManagement/PromptManagementPage';
 
 import '@patternfly/chatbot/dist/css/main.css';
 
@@ -48,6 +52,11 @@ export const useNavData = (): NavDataItem[] => [
         path: globAiAssetsAll,
         href: aiAssetsRootPath,
       },
+      {
+        label: 'Prompt management',
+        path: globPromptManagementAll,
+        href: promptManagementRootPath,
+      },
     ],
   },
 ];
@@ -79,6 +88,7 @@ const AppRoutes = (): React.ReactElement => (
     >
       <Route path=":namespace" element={<AIAssetsPage />} />
     </Route>
+    <Route path="/prompt-management/*" element={<PromptManagementPage />} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

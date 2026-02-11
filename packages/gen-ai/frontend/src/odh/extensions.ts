@@ -1,4 +1,7 @@
-import { DataScienceStackComponent } from '@odh-dashboard/internal/concepts/areas/types';
+import {
+  DataScienceStackComponent,
+  SupportedArea,
+} from '@odh-dashboard/internal/concepts/areas/types';
 import type {
   NavExtension,
   RouteExtension,
@@ -10,6 +13,8 @@ import {
   globAiAssetsAll,
   globChatPlaygroundAll,
   globGenAiAll,
+  globPromptManagementAll,
+  promptManagementRootPath,
 } from '~/app/utilities/routes';
 import type { AIAssetsTabExtension } from '~/odh/extension-points';
 
@@ -70,6 +75,20 @@ const extensions: (NavExtension | RouteExtension | AreaExtension | AIAssetsTabEx
       href: aiAssetsRootPath,
       section: 'gen-ai-studio',
       path: globAiAssetsAll,
+      label: 'Tech Preview',
+    },
+  },
+  {
+    type: 'app.navigation/href',
+    flags: {
+      required: [PLUGIN_GEN_AI, SupportedArea.MLFLOW],
+    },
+    properties: {
+      id: 'prompt-management',
+      title: 'Prompt management',
+      href: promptManagementRootPath,
+      section: 'gen-ai-studio',
+      path: globPromptManagementAll,
       label: 'Tech Preview',
     },
   },

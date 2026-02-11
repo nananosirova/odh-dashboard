@@ -27,6 +27,23 @@ const mfProxies = moduleFederationConfig
   .flat()
   .filter((p) => p);
 
+// MF_LOCAL: comma-separated list of module federation module names to load from local dev servers.
+// Example: MF_LOCAL=genAi  (requires running the gen-ai frontend dev server on its configured local port)
+const MF_LOCAL = process.env.MF_LOCAL ? process.env.MF_LOCAL.split(',').map((s) => s.trim()) : [];
+const localMfProxies = moduleFederationConfig
+  .filter((c) => MF_LOCAL.includes(c.name) && c.backend?.localService)
+  .map((c) => ({
+    name: c.name,
+    host: c.backend.localService.host,
+    port: c.backend.localService.port,
+  }));
+if (localMfProxies.length > 0) {
+  console.info(
+    'Local module federation services:',
+    localMfProxies.map((p) => `${p.name} -> http://${p.host}:${p.port}`),
+  );
+}
+
 module.exports = smp.wrap(
   merge(
     {
@@ -71,8 +88,10 @@ module.exports = smp.wrap(
             // Environment variables:
             // - DEV_LEGACY=true: Forces legacy behavior for oauth-proxy clusters
             //   (uses old subdomain format and sends x-forwarded-access-token header)
+            // - DASHBOARD_HOST: Override the dashboard host directly (e.g. for port-forward setups)
             const devLegacy = process.env.DEV_LEGACY === 'true';
             let dashboardHost;
+            let shouldFwdAccessToken = false;
             let token;
 
             try {
@@ -91,36 +110,54 @@ module.exports = smp.wrap(
             const app = process.env.ODH_APP || 'odh-dashboard';
             console.info('Using project:', odhProject);
 
-            // try to get dashboard host from HttpRoute and Gateway
-            try {
-              // Get the HttpRoute resource as JSON
-              const httpRouteJson = execSync(`oc get httproutes -n ${odhProject} ${app} -o json`, {
-                stdio: ['pipe', 'pipe', 'ignore'],
-              }).toString();
-              const httpRoute = JSON.parse(httpRouteJson);
+            // Allow explicit override via env var (e.g. for port-forward setups).
+            // When using DASHBOARD_HOST (typically via port-forward to kube-rbac-proxy),
+            // the backend also needs x-forwarded-access-token to proxy K8s API calls.
+            dashboardHost = process.env.DASHBOARD_HOST || undefined;
+            const mlflowHost = process.env.MLFLOW_HOST || undefined;
+            if (dashboardHost) {
+              console.info('Using DASHBOARD_HOST override:', dashboardHost);
+              shouldFwdAccessToken = true;
+            }
+            if (mlflowHost) {
+              console.info('Using MLFLOW_HOST override:', mlflowHost);
+            }
 
-              // Extract parent gateway name and namespace
-              const parentRef = httpRoute?.status?.parents?.[0]?.parentRef;
-              const gatewayName = parentRef?.name;
-              const gatewayNamespace = parentRef?.namespace || odhProject;
-
-              if (gatewayName && gatewayNamespace) {
-                // Get the Gateway resource as JSON
-                const gatewayJson = execSync(
-                  `oc get gateway -n ${gatewayNamespace} ${gatewayName} -o json`,
-                  { stdio: ['pipe', 'pipe', 'ignore'] },
+            if (!dashboardHost) {
+              // try to get dashboard host from HttpRoute and Gateway
+              try {
+                // Get the HttpRoute resource as JSON
+                const httpRouteJson = execSync(
+                  `oc get httproutes -n ${odhProject} ${app} -o json`,
+                  {
+                    stdio: ['pipe', 'pipe', 'ignore'],
+                  },
                 ).toString();
-                const gateway = JSON.parse(gatewayJson);
+                const httpRoute = JSON.parse(httpRouteJson);
 
-                // Find the listener with name 'https'
-                const listeners = gateway?.spec?.listeners || [];
-                const httpsListener = listeners.find((listener) => listener.name === 'https');
-                if (httpsListener && httpsListener.hostname) {
-                  dashboardHost = httpsListener.hostname;
+                // Extract parent gateway name and namespace
+                const parentRef = httpRoute?.status?.parents?.[0]?.parentRef;
+                const gatewayName = parentRef?.name;
+                const gatewayNamespace = parentRef?.namespace || odhProject;
+
+                if (gatewayName && gatewayNamespace) {
+                  // Get the Gateway resource as JSON
+                  const gatewayJson = execSync(
+                    `oc get gateway -n ${gatewayNamespace} ${gatewayName} -o json`,
+                    { stdio: ['pipe', 'pipe', 'ignore'] },
+                  ).toString();
+                  const gateway = JSON.parse(gatewayJson);
+
+                  // Find the listener with name 'https'
+                  const listeners = gateway?.spec?.listeners || [];
+                  const httpsListener = listeners.find((listener) => listener.name === 'https');
+                  if (httpsListener && httpsListener.hostname) {
+                    dashboardHost = httpsListener.hostname;
+                  }
                 }
+              } catch (e) {
+                // ignore
               }
-            } catch (e) {
-              // ignore
             }
 
             if (!dashboardHost) {
@@ -157,21 +194,26 @@ module.exports = smp.wrap(
 
             console.info('Dashboard host:', dashboardHost);
 
-            let shouldFwdAccessToken = false;
             // Detect if oauth-proxy is being used for legacy compatibility
-            try {
-              const deploymentJson = execSync(`oc get deployment -n ${odhProject} ${app} -o json`, {
-                stdio: ['pipe', 'pipe', 'ignore'],
-              }).toString();
-              const deployment = JSON.parse(deploymentJson);
-              const containers = deployment?.spec?.template?.spec?.containers || [];
-              shouldFwdAccessToken = containers.some(
-                (container) =>
-                  container.name === 'oauth-proxy' || container.image?.includes('oauth-proxy'),
-              );
-            } catch (e) {
-              shouldFwdAccessToken = devLegacy;
-              // ignore
+            // (skip when DASHBOARD_HOST is set — we already know we need the token)
+            if (!shouldFwdAccessToken) {
+              try {
+                const deploymentJson = execSync(
+                  `oc get deployment -n ${odhProject} ${app} -o json`,
+                  {
+                    stdio: ['pipe', 'pipe', 'ignore'],
+                  },
+                ).toString();
+                const deployment = JSON.parse(deploymentJson);
+                const containers = deployment?.spec?.template?.spec?.containers || [];
+                shouldFwdAccessToken = containers.some(
+                  (container) =>
+                    container.name === 'oauth-proxy' || container.image?.includes('oauth-proxy'),
+                );
+              } catch (e) {
+                shouldFwdAccessToken = devLegacy;
+                // ignore
+              }
             }
 
             const headers = {
@@ -182,9 +224,26 @@ module.exports = smp.wrap(
               headers['x-forwarded-access-token'] = token;
             }
 
-            return [
+            // When MLFLOW_HOST is set, route /mlflow to a separate service
+            const dashboardContexts = mlflowHost
+              ? ['/api', '/_mf', ...mfProxies]
+              : ['/api', '/_mf', '/mlflow', ...mfProxies];
+
+            // Local MF proxy entries must come before the general /_mf proxy.
+            // pathRewrite strips the /_mf/<name> prefix so that /_mf/genAi/remoteEntry.js
+            // is forwarded to http://localhost:9102/remoteEntry.js
+            const localMfProxyEntries = localMfProxies.map((p) => ({
+              context: [`/_mf/${p.name}`],
+              target: `http://${p.host}:${p.port}`,
+              secure: false,
+              changeOrigin: true,
+              pathRewrite: { [`^/_mf/${p.name}`]: '' },
+            }));
+
+            const proxyEntries = [
+              ...localMfProxyEntries,
               {
-                context: ['/api', '/_mf', '/mlflow', ...mfProxies],
+                context: dashboardContexts,
                 target: `https://${dashboardHost}`,
                 secure: false,
                 changeOrigin: true,
@@ -199,6 +258,18 @@ module.exports = smp.wrap(
                 headers,
               },
             ];
+
+            if (mlflowHost) {
+              proxyEntries.push({
+                context: ['/mlflow'],
+                target: `https://${mlflowHost}`,
+                secure: false,
+                changeOrigin: true,
+                headers,
+              });
+            }
+
+            return proxyEntries;
           }
           return [
             {

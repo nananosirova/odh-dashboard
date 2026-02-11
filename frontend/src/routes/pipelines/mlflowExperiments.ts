@@ -17,11 +17,16 @@ export const getIframeHashPathQuery = (iframe: HTMLIFrameElement): string | null
   return hashIndex !== -1 ? iframePathQuery.slice(hashIndex + 1) : null;
 };
 
-export const buildParentPathQuery = (pathname: string, search: string): string => {
-  const subPath = pathname.startsWith(MLFLOW_EXPERIMENTS_ROUTE)
-    ? pathname.substring(MLFLOW_EXPERIMENTS_ROUTE.length)
+export const buildParentPathQuery = (
+  pathname: string,
+  search: string,
+  baseRoute: string = MLFLOW_EXPERIMENTS_ROUTE,
+  defaultPath: string = MLFLOW_DEFAULT_PATH,
+): string => {
+  const subPath = pathname.startsWith(baseRoute)
+    ? pathname.substring(baseRoute.length)
     : pathname;
-  const cleanPath = subPath === '' || subPath === '/' ? MLFLOW_DEFAULT_PATH : subPath;
+  const cleanPath = subPath === '' || subPath === '/' ? defaultPath : subPath;
   return search ? `${cleanPath}${search}` : cleanPath;
 };
 

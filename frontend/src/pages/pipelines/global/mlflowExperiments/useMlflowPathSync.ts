@@ -11,15 +11,31 @@ import {
   WORKSPACE_QUERY_PARAM,
 } from '#~/routes/pipelines/mlflowExperiments';
 
+export type MlflowPathSyncOptions = {
+  /** The ODH base route to strip/prepend (e.g. '/develop-train/experiments-mlflow') */
+  baseRoute?: string;
+  /** The default MLflow hash path (e.g. '/experiments' or '/prompts') */
+  defaultPath?: string;
+  /** Pre-resolved namespace; when provided the hook skips reading the workspace query param */
+  namespace?: string;
+};
+
 export const useMlflowPathSync = (
+  options?: MlflowPathSyncOptions,
   ref?: React.ForwardedRef<HTMLIFrameElement>,
 ): { iframeRef: React.RefCallback<HTMLIFrameElement>; initIframeSrc: string } => {
+  const {
+    baseRoute = MLFLOW_EXPERIMENTS_ROUTE,
+    defaultPath = MLFLOW_DEFAULT_PATH,
+    namespace: namespaceProp,
+  } = options ?? {};
+
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const [searchParams] = useSearchParams();
-  const namespace = searchParams.get(WORKSPACE_QUERY_PARAM);
-  const parentPathQuery = buildParentPathQuery(pathname, search);
-  const initIframeSrc = buildIframePathQuery(MLFLOW_DEFAULT_PATH, namespace || undefined);
+  const namespace = namespaceProp ?? searchParams.get(WORKSPACE_QUERY_PARAM) ?? undefined;
+  const parentPathQuery = buildParentPathQuery(pathname, search, baseRoute, defaultPath);
+  const initIframeSrc = buildIframePathQuery(defaultPath, namespace);
   const syncLock = React.useRef(false);
   const internalIframeRef = React.useRef<HTMLIFrameElement | null>(null);
   const iframeRef = React.useCallback(
@@ -63,7 +79,7 @@ export const useMlflowPathSync = (
       const iframePath = getIframeHashPathQuery(iframe);
       if (iframePath && normalizePathQuery(iframePath) !== normalizePathQuery(parentPathQuery)) {
         syncLock.current = true;
-        navigate(`${MLFLOW_EXPERIMENTS_ROUTE}${iframePath}`, { replace: !histPush });
+        navigate(`${baseRoute}${iframePath}`, { replace: !histPush });
       }
     };
 
@@ -78,7 +94,7 @@ export const useMlflowPathSync = (
       iframe.removeEventListener('load', onLoad);
       cleanupPatch?.();
     };
-  }, [navigate, parentPathQuery]);
+  }, [navigate, parentPathQuery, baseRoute]);
 
   return { iframeRef, initIframeSrc };
 };

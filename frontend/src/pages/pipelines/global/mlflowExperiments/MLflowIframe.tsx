@@ -5,7 +5,7 @@ import { useMlflowPathSync } from './useMlflowPathSync';
 import { MLFLOW_DARK_MODE_KEY } from './utils';
 
 const MlflowIframe = React.forwardRef<HTMLIFrameElement>((_, ref) => {
-  const { iframeRef, initIframeSrc } = useMlflowPathSync(ref);
+  const { iframeRef, initIframeSrc } = useMlflowPathSync(undefined, ref);
   const { theme } = useThemeContext();
   const [isLoading, setIsLoading] = React.useState(true);
 
