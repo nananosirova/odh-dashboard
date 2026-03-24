@@ -8,6 +8,7 @@ import {
 import {
   mockK8sResourceList,
   mockProjectK8sResource,
+  mockDashboardConfig,
   buildMockRunKF,
   buildMockPipelineVersions,
   buildMockPipelineVersion,
@@ -405,6 +406,68 @@ describe('Pipeline runs', () => {
           verifyRelativeURL(
             `/develop-train/pipelines/runs/${projectName}/runs/${mockActiveRuns[0].run_id}`,
           );
+        });
+
+        it('compare runs button navigates to MLflow when feature flag is enabled', () => {
+          cy.interceptOdh('GET /api/config', mockDashboardConfig({ mlflow: true }));
+          pipelineRunsGlobal.visit(projectName, 'active');
+
+          activeRunsTable.getRowByName(mockActiveRuns[0].display_name).findCheckbox().click();
+          activeRunsTable.getRowByName(mockActiveRuns[1].display_name).findCheckbox().click();
+
+          pipelineRunsGlobal.findCompareRunsButton().click();
+
+          const runIds = [mockActiveRuns[0].run_id, mockActiveRuns[1].run_id];
+          const experimentIds = [
+            ...new Set([mockActiveRuns[0].experiment_id, mockActiveRuns[1].experiment_id]),
+          ];
+          const params = new URLSearchParams();
+          params.set('runs', JSON.stringify(runIds));
+          params.set('experiments', JSON.stringify(experimentIds));
+          params.set('workspace', projectName);
+          verifyRelativeURL(`/develop-train/mlflow/experiments/compare-runs?${params.toString()}`);
+        });
+
+        it('compare runs button navigates to KFP when MLflow feature flag is disabled', () => {
+          cy.interceptOdh('GET /api/config', mockDashboardConfig({ mlflow: false }));
+          pipelineRunsGlobal.visit(projectName, 'active');
+
+          activeRunsTable.getRowByName(mockActiveRuns[0].display_name).findCheckbox().click();
+          activeRunsTable.getRowByName(mockActiveRuns[1].display_name).findCheckbox().click();
+
+          pipelineRunsGlobal.findCompareRunsButton().click();
+
+          verifyRelativeURL(
+            `/develop-train/pipelines/runs/${projectName}/compare-runs?compareRuns=${mockActiveRuns[0].run_id},${mockActiveRuns[1].run_id}`,
+          );
+        });
+
+        it('experiment link navigates to MLflow when feature flag is enabled', () => {
+          cy.interceptOdh('GET /api/config', mockDashboardConfig({ mlflow: true }));
+          pipelineRunsGlobal.visit(projectName, 'active');
+
+          activeRunsTable
+            .getRowByName(mockActiveRuns[0].display_name)
+            .findExperimentLink()
+            .should(
+              'have.attr',
+              'href',
+              `/develop-train/mlflow/experiments/${mockActiveRuns[0].experiment_id}?workspace=${projectName}`,
+            );
+        });
+
+        it('experiment link navigates to KFP when MLflow feature flag is disabled', () => {
+          cy.interceptOdh('GET /api/config', mockDashboardConfig({ mlflow: false }));
+          pipelineRunsGlobal.visit(projectName, 'active');
+
+          activeRunsTable
+            .getRowByName(mockActiveRuns[0].display_name)
+            .findExperimentLink()
+            .should(
+              'have.attr',
+              'href',
+              `/develop-train/experiments/${projectName}/${mockActiveRuns[0].experiment_id}/runs`,
+            );
         });
       });
 

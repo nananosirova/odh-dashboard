@@ -3,6 +3,9 @@ import { Label, Skeleton, Split, SplitItem } from '@patternfly/react-core';
 import { Link } from 'react-router-dom';
 import { usePipelinesAPI } from '#~/concepts/pipelines/context';
 import { experimentRunsRoute } from '#~/routes/pipelines/experiments';
+import { mlflowExperimentRoute } from '#~/routes/pipelines/mlflow';
+import useIsAreaAvailable from '#~/concepts/areas/useIsAreaAvailable';
+import { SupportedArea } from '#~/concepts/areas';
 import { ExperimentKF } from '#~/concepts/pipelines/kfTypes';
 import { NoRunContent } from '#~/concepts/pipelines/content/tables/renderUtils';
 import TruncatedText from '#~/components/TruncatedText';
@@ -21,6 +24,7 @@ const PipelineRunTableRowExperiment: React.FC<PipelineRunTableRowExperimentProps
   error,
 }) => {
   const { namespace } = usePipelinesAPI();
+  const isMLflowEnabled = useIsAreaAvailable(SupportedArea.MLFLOW).status;
 
   if (!loaded && !error) {
     return <Skeleton />;
@@ -32,7 +36,13 @@ const PipelineRunTableRowExperiment: React.FC<PipelineRunTableRowExperimentProps
   return (
     <Split hasGutter>
       <SplitItem>
-        <Link to={experimentRunsRoute(namespace, experiment.experiment_id)}>
+        <Link
+          to={
+            isMLflowEnabled
+              ? mlflowExperimentRoute(namespace, experiment.experiment_id)
+              : experimentRunsRoute(namespace, experiment.experiment_id)
+          }
+        >
           <TruncatedText content={experiment.display_name} maxLines={1} />
         </Link>
       </SplitItem>
