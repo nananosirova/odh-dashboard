@@ -679,4 +679,127 @@ describe('PromptTable - Tab Navigation', () => {
       expect(screen.getByText('template-3')).toBeInTheDocument();
     });
   });
+
+  describe('Model filter and sort', () => {
+    const modelPrompts: MLflowPrompt[] = [
+      {
+        name: 'prompt-llama',
+        description: '',
+        latest_version: 1,
+        model_config: { model_name: 'llama-3' },
+        tags: {},
+        creation_timestamp: '2024-01-15T10:00:00Z',
+        scope: { type: 'project', namespace: 'my-project' },
+      },
+      {
+        name: 'prompt-none',
+        description: '',
+        latest_version: 1,
+        tags: {},
+        creation_timestamp: '2024-01-14T10:00:00Z',
+        scope: { type: 'project', namespace: 'my-project' },
+      },
+      {
+        name: 'prompt-granite',
+        description: '',
+        latest_version: 1,
+        model_config: { model_name: 'granite-8b' },
+        tags: {},
+        creation_timestamp: '2024-01-13T10:00:00Z',
+        scope: { type: 'project', namespace: 'my-project' },
+      },
+      {
+        name: 'prompt-global-mistral',
+        description: '',
+        latest_version: 1,
+        model_config: { model_name: 'mistral-7b' },
+        tags: {},
+        creation_timestamp: '2024-01-12T10:00:00Z',
+        scope: { type: 'global', namespace: 'rhoai-templates' },
+      },
+    ];
+
+    const getRowNames = () =>
+      within(screen.getByTestId('prompt-table'))
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.getAttribute('data-testid'));
+
+    beforeEach(() => {
+      mockUsePromptsList.mockReturnValue({
+        prompts: modelPrompts,
+        isLoading: false,
+        isFetchingNextPage: false,
+        fetchNextPage: jest.fn(),
+        error: null,
+      });
+    });
+
+    it('should switch the filter type to Model and show the model select', () => {
+      render(<PromptTable {...defaultProps} />);
+
+      expect(screen.getByTestId('prompt-search-input')).toBeInTheDocument();
+      expect(screen.queryByTestId('prompt-model-filter-select')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('prompt-filter-type-toggle'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Model' }));
+
+      expect(screen.getByTestId('prompt-model-filter-select')).toBeInTheDocument();
+      expect(screen.queryByTestId('prompt-search-input')).not.toBeInTheDocument();
+    });
+
+    it('should list unique models from the current tab and filter rows by the selected model', () => {
+      render(<PromptTable {...defaultProps} />);
+
+      fireEvent.click(screen.getByTestId('prompt-filter-type-toggle'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Model' }));
+      fireEvent.click(screen.getByTestId('prompt-model-filter-select'));
+
+      expect(screen.getByTestId('prompt-model-filter-option-granite-8b')).toBeInTheDocument();
+      expect(screen.getByTestId('prompt-model-filter-option-llama-3')).toBeInTheDocument();
+      expect(screen.queryByTestId('prompt-model-filter-option-mistral-7b')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('option', { name: 'llama-3' }));
+
+      expect(getRowNames()).toEqual(['prompt-table-row-prompt-llama']);
+    });
+
+    it('should show the selected model in the toggle with the full name as its title', () => {
+      render(<PromptTable {...defaultProps} />);
+
+      fireEvent.click(screen.getByTestId('prompt-filter-type-toggle'));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Model' }));
+
+      const toggle = screen.getByTestId('prompt-model-filter-select');
+      expect(toggle).toHaveTextContent('Filter by model');
+
+      fireEvent.click(toggle);
+      fireEvent.click(screen.getByRole('option', { name: 'granite-8b' }));
+
+      expect(toggle).toHaveTextContent('granite-8b');
+      expect(within(toggle).getByTitle('granite-8b')).toBeInTheDocument();
+    });
+
+    it('should sort by model ascending and descending with unspecified models last', () => {
+      render(<PromptTable {...defaultProps} />);
+
+      const sortButton = within(screen.getByTestId('prompt-model-column-header')).getByRole(
+        'button',
+      );
+
+      fireEvent.click(sortButton);
+      expect(getRowNames()).toEqual([
+        'prompt-table-row-prompt-granite',
+        'prompt-table-row-prompt-llama',
+        'prompt-table-row-prompt-none',
+      ]);
+
+      fireEvent.click(sortButton);
+      expect(getRowNames()).toEqual([
+        'prompt-table-row-prompt-llama',
+        'prompt-table-row-prompt-granite',
+        'prompt-table-row-prompt-none',
+      ]);
+    });
+  });
 });
