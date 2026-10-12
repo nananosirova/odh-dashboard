@@ -1,12 +1,26 @@
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { IdentifierResourceType, SchedulingType } from '@odh-dashboard/k8s-core';
+import {
+  k8sGetResource,
+  k8sListResource,
+  k8sListResourceItems,
+  useK8sWatchResource,
+} from '@openshift/dynamic-plugin-sdk-utils';
+import { IdentifierResourceType, SchedulingType, type Identifier } from '@odh-dashboard/k8s-core';
 import { DEFAULT_LIST_FETCH_STATE } from '@odh-dashboard/ui-core/utilities/fetchState';
 import { LocalQueuesContext } from '@odh-dashboard/ui-core/context/LocalQueuesContext';
 import { mockHardwareProfile } from '@odh-dashboard/hardware-profiles/__mocks__/mockHardwareProfile';
 import HardwareProfileDetailsPopover from '#~/concepts/hardwareProfiles/HardwareProfileDetailsPopover';
+
+jest.mock('@openshift/dynamic-plugin-sdk-utils', () => ({
+  ...jest.requireActual('@openshift/dynamic-plugin-sdk-utils'),
+  k8sGetResource: jest.fn(),
+  k8sListResource: jest.fn(),
+  k8sListResourceItems: jest.fn(),
+  useK8sWatchResource: jest.fn(),
+}));
 
 const renderWithContext = (ui: React.ReactElement) =>
   render(
@@ -154,6 +168,173 @@ describe('HardwareProfileDetailsPopover', () => {
       expect(details).toHaveTextContent('Local queue');
       expect(details).toHaveTextContent('test-queue');
       expect(details).not.toHaveTextContent('No matching hardware profile found');
+    });
+  });
+
+  describe('DRA claim template', () => {
+    const dra = { resourceClaimTemplateName: 'single-mig-partition' };
+    const descriptionAnnotation = 'opendatahub.io/resource-claim-description';
+
+    const openPopover = async (
+      annotations?: Record<string, string>,
+      identifiers?: Identifier[],
+    ) => {
+      renderWithContext(
+        <HardwareProfileDetailsPopover
+          hardwareProfile={mockHardwareProfile({
+            displayName: 'DRA Profile',
+            dra,
+            annotations,
+            identifiers,
+          })}
+        />,
+      );
+      await userEvent.click(screen.getByTestId('hardware-profile-details-popover'));
+    };
+
+    it('should display the claim template name and description', async () => {
+      await openPopover({
+        [descriptionAnnotation]: 'Requests one partitioned GPU device for the workload.',
+      });
+
+      const draDetails = screen.getByTestId('hardware-profile-dra-details');
+      expect(draDetails).toHaveTextContent('Claim template');
+      expect(draDetails).not.toHaveTextContent('Device requests');
+      expect(within(draDetails).getByRole('term')).toHaveTextContent('Claim template Tech Preview');
+      expect(screen.getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+        'single-mig-partition',
+      );
+      expect(screen.getByTestId('hardware-profile-dra-template')).not.toHaveTextContent(
+        'Tech Preview',
+      );
+      expect(screen.getByTestId('hardware-profile-dra-description')).toHaveTextContent(
+        'Requests one partitioned GPU device for the workload.',
+      );
+      const details = screen.getByTestId('hardware-profile-details');
+      expect(details).toHaveTextContent('Default = 2 GiB, Min = 2 GiB, Max = 5 GiB');
+      expect(details).toHaveTextContent('Default = 1 Cores, Min = 1 Cores, Max = 2 Cores');
+    });
+
+    it('should show the claim template resource name and type in a nested popover', async () => {
+      await openPopover();
+
+      await userEvent.click(
+        within(screen.getByTestId('hardware-profile-dra-details')).getByTestId(
+          'resource-name-icon-button',
+        ),
+      );
+
+      expect(await screen.findByTestId('resource-name-text')).toHaveTextContent(
+        'single-mig-partition',
+      );
+      expect(screen.getByTestId('resource-kind-text')).toHaveTextContent('ResourceClaimTemplate');
+
+      await userEvent.click(screen.getByTestId('resource-kind-text'));
+      await act(async () => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 500);
+        });
+      });
+
+      expect(screen.getByTestId('hardware-profile-details')).toBeInTheDocument();
+    });
+
+    it('should still close on Escape', async () => {
+      await openPopover();
+
+      await userEvent.keyboard('{Escape}');
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('hardware-profile-details')).not.toBeInTheDocument(),
+      );
+    });
+
+    it('should render the DRA details for a profile without identifiers', async () => {
+      await openPopover(undefined, []);
+
+      expect(screen.getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+        'single-mig-partition',
+      );
+      expect(screen.getByTestId('hardware-profile-details')).not.toHaveTextContent(
+        'No matching hardware profile found',
+      );
+    });
+
+    it('should omit the description when the annotation is missing', async () => {
+      await openPopover();
+
+      expect(screen.getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+        'single-mig-partition',
+      );
+      expect(screen.queryByTestId('hardware-profile-dra-description')).not.toBeInTheDocument();
+    });
+
+    it.each(['', '  \n\t  '])(
+      'should omit the description when the annotation is %j',
+      async (value) => {
+        await openPopover({ [descriptionAnnotation]: value });
+
+        expect(screen.getByTestId('hardware-profile-dra-template')).toBeInTheDocument();
+        expect(screen.queryByTestId('hardware-profile-dra-description')).not.toBeInTheDocument();
+      },
+    );
+
+    it('should truncate a long description and show it in full in a tooltip', async () => {
+      const longText = 'Requests one partitioned GPU device for the workload. '.repeat(20).trim();
+      await openPopover({ [descriptionAnnotation]: longText });
+
+      const descriptionText = screen.getByTestId('hardware-profile-dra-description-text');
+      expect(descriptionText).toBeInTheDocument();
+      expect(screen.getByRole('dialog').style.maxWidth).toContain('40rem');
+
+      await userEvent.hover(descriptionText);
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(longText);
+    });
+
+    it('should show a multi-line description on a single line', async () => {
+      await openPopover({ [descriptionAnnotation]: 'Line one\nLine two\n\nLine three' });
+
+      expect(screen.getByTestId('hardware-profile-dra-description').textContent).toBe(
+        'Line one Line two Line three',
+      );
+    });
+
+    it('should render markup in the description as plain text', async () => {
+      await openPopover({ [descriptionAnnotation]: '<b>x</b>' });
+
+      const description = screen.getByTestId('hardware-profile-dra-description');
+      expect(description.textContent).toBe('<b>x</b>');
+      expect(description.querySelector('b')).toBeNull();
+    });
+
+    it('should not fetch the ResourceClaimTemplate or any ResourceClaim', async () => {
+      await openPopover({ [descriptionAnnotation]: 'Some description' });
+
+      expect(screen.getByTestId('hardware-profile-dra-details')).toBeInTheDocument();
+      expect(k8sGetResource).not.toHaveBeenCalled();
+      expect(k8sListResource).not.toHaveBeenCalled();
+      expect(k8sListResourceItems).not.toHaveBeenCalled();
+      expect(useK8sWatchResource).not.toHaveBeenCalled();
+    });
+
+    it('should not render DRA details or change the width for a non-DRA profile', async () => {
+      renderWithContext(
+        <HardwareProfileDetailsPopover
+          hardwareProfile={mockHardwareProfile({
+            displayName: 'Plain Profile',
+            annotations: { [descriptionAnnotation]: 'Ignored without spec.dra' },
+          })}
+        />,
+      );
+      await userEvent.click(screen.getByTestId('hardware-profile-details-popover'));
+
+      expect(screen.queryByTestId('hardware-profile-dra-details')).not.toBeInTheDocument();
+      const details = screen.getByTestId('hardware-profile-details');
+      expect(details).not.toHaveTextContent('Claim template');
+      expect(details).not.toHaveTextContent('Ignored without spec.dra');
+      expect(details).toHaveTextContent('Default = 1 Cores, Min = 1 Cores, Max = 2 Cores');
+      expect(screen.getByRole('dialog').style.maxWidth).toBe('');
     });
   });
 });

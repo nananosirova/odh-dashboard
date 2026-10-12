@@ -25,7 +25,11 @@ import {
   formatIdentifierDetails,
   sortIdentifiers,
   getLocalQueueLabel,
+  getDRAHardwareProfileDetails,
 } from './utils';
+import DRAHardwareProfileDetailsSection from './DRAHardwareProfileDetailsSection';
+
+const DRA_POPOVER_MAX_WIDTH = 'min(40rem, calc(100vw - var(--pf-t--global--spacer--2xl)))';
 
 type HardwareProfileDetailsPopoverProps = {
   localQueueName?: string;
@@ -77,8 +81,17 @@ const HardwareProfileDetailsPopover: React.FC<HardwareProfileDetailsPopoverProps
   );
 
   const description = hardwareProfile && getHardwareProfileDescription(hardwareProfile);
+  const draDetails = hardwareProfile && getDRAHardwareProfileDetails(hardwareProfile);
 
   const closePopover = (event: MouseEvent | KeyboardEvent) => {
+    // A click inside a nested popover (e.g. the claim template's resource name) is not an outside click.
+    if (
+      event instanceof MouseEvent &&
+      event.target instanceof Element &&
+      event.target.closest('[role="dialog"]')
+    ) {
+      return;
+    }
     setIsPopoverVisible(false);
     if (event instanceof KeyboardEvent) {
       requestAnimationFrame(() => triggerRef.current?.focus());
@@ -103,6 +116,7 @@ const HardwareProfileDetailsPopover: React.FC<HardwareProfileDetailsPopoverProps
   return (
     <Popover
       hasAutoWidth={!!hardwareProfile}
+      maxWidth={draDetails ? DRA_POPOVER_MAX_WIDTH : undefined}
       isVisible={isPopoverVisible}
       shouldOpen={() => setIsPopoverVisible(true)}
       shouldClose={closePopover}
@@ -129,6 +143,11 @@ const HardwareProfileDetailsPopover: React.FC<HardwareProfileDetailsPopoverProps
                     )}
                   </StackItem>
                 ))}
+              {draDetails && (
+                <StackItem>
+                  <DRAHardwareProfileDetailsSection details={draDetails} />
+                </StackItem>
+              )}
             </>
           ) : noHpTableView ? (
             <StackItem>

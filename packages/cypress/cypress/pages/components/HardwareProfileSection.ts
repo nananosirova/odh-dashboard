@@ -40,6 +40,18 @@ export class HardwareProfileSection {
     return cy.findByTestId('hardware-profile-details-popover');
   }
 
+  findDRADetails(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.findDetails().findByTestId('hardware-profile-dra-details');
+  }
+
+  findDRATemplate(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.findDetails().findByTestId('hardware-profile-dra-template');
+  }
+
+  findDRADescription(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.findDetails().findByTestId('hardware-profile-dra-description');
+  }
+
   findKueueFilteringInfo(): Cypress.Chainable<JQuery<HTMLElement>> {
     return cy.findByTestId('kueue-filtering-info');
   }
