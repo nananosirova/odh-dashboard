@@ -1430,4 +1430,77 @@ describe('Workbench Hardware Profiles', () => {
       createSpawnerPage.findLocalQueueMissingWarning().should('not.exist');
     });
   });
+
+  describe('DRA claim template in the expanded workbench row', () => {
+    const draProfile = mockHardwareProfile({
+      name: 'dra-profile',
+      displayName: 'DRA Profile',
+      dra: { resourceClaimTemplateName: 'single-mig-partition' },
+      annotations: {
+        'opendatahub.io/resource-claim-description':
+          'Requests one partitioned GPU device for the workload.',
+      },
+    });
+
+    const initDRAIntercepts = (hardwareProfileName: string) => {
+      initIntercepts();
+      cy.interceptK8sList(
+        { model: HardwareProfileModel, ns: 'opendatahub' },
+        mockK8sResourceList([...mockGlobalScopedHardwareProfiles, draProfile]),
+      );
+      cy.interceptK8sList(
+        { model: NotebookModel, ns: 'test-project' },
+        mockK8sResourceList([
+          mockNotebookK8sResource({
+            hardwareProfileName,
+            hardwareProfileNamespace: 'opendatahub',
+            displayName: 'Test Notebook',
+          }),
+        ]),
+      );
+      const resourceClaimRequestSpy = cy.spy().as('resourceClaimRequest');
+      cy.intercept({ pathname: /\/apis\/resource\.k8s\.io\// }, (req) => {
+        resourceClaimRequestSpy();
+        req.reply({ statusCode: 404, body: {} });
+      });
+    };
+
+    it('should show the claim template and description of the bound DRA hardware profile', () => {
+      initDRAIntercepts('dra-profile');
+
+      projectDetails.visit(projectName);
+      projectDetails.findSectionTab('workbenches').click();
+      const notebookRow = workbenchPage.getNotebookRow('Test Notebook');
+      notebookRow.findExpansionButton().click();
+
+      notebookRow
+        .findHardwareProfileDRADetails()
+        .should('contain.text', 'Claim template')
+        .and('contain.text', 'Tech Preview')
+        .and('not.contain.text', 'Device requests');
+      notebookRow.findHardwareProfileDRATemplate().should('have.text', 'single-mig-partition');
+      notebookRow
+        .findHardwareProfileDRADescription()
+        .should('contain.text', 'Requests one partitioned GPU device for the workload.');
+      notebookRow
+        .findLimitsDetails()
+        .should('contain.text', 'Requests')
+        .and('contain.text', 'Claim template');
+      notebookRow.findHardwareProfileDRADetails().testA11y();
+      cy.get('@resourceClaimRequest').should('not.have.been.called');
+    });
+
+    it('should not show DRA details for a non-DRA hardware profile', () => {
+      initDRAIntercepts('small-profile');
+
+      projectDetails.visit(projectName);
+      projectDetails.findSectionTab('workbenches').click();
+      const notebookRow = workbenchPage.getNotebookRow('Test Notebook');
+      notebookRow.findExpansionButton().click();
+
+      notebookRow.findLimitsDetails().should('contain.text', 'Limits');
+      notebookRow.findHardwareProfileDRADetails().should('not.exist');
+      cy.get('@resourceClaimRequest').should('not.have.been.called');
+    });
+  });
 });

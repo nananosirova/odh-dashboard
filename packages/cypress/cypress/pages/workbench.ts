@@ -271,6 +271,22 @@ class NotebookRow extends TableRow {
     return this.find().siblings();
   }
 
+  findHardwareProfileDRADetails() {
+    return this.findExpansion().findByTestId('hardware-profile-dra-details');
+  }
+
+  findHardwareProfileDRATemplate() {
+    return this.findHardwareProfileDRADetails().findByTestId('hardware-profile-dra-template');
+  }
+
+  findHardwareProfileDRADescription() {
+    return this.findHardwareProfileDRADetails().findByTestId('hardware-profile-dra-description');
+  }
+
+  findLimitsDetails() {
+    return this.findExpansion().findByTestId('notebook-limits-details');
+  }
+
   findAddStorageButton() {
     return this.find()
       .siblings()

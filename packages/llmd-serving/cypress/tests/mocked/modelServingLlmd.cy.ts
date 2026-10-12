@@ -215,6 +215,77 @@ describe('Model Serving LLMD', () => {
         .should('have.text', 'Small Profile');
     });
 
+    [
+      {
+        scenario: 'with a hardware profile namespace annotation',
+        namespaceAnnotation: 'opendatahub',
+        profileNamespace: 'opendatahub',
+      },
+      {
+        scenario: 'with only a hardware profile name annotation',
+        namespaceAnnotation: '',
+        profileNamespace: 'test-project',
+      },
+    ].forEach(({ scenario, namespaceAnnotation, profileNamespace }) => {
+      it(`should show DRA claim template in the expanded row ${scenario}`, () => {
+        initIntercepts({
+          llmInferenceServices: [
+            mockLLMInferenceServiceK8sResource({
+              name: 'facebook-opt-125m-single',
+              namespace: 'test-project',
+              displayName: 'Facebook OPT 125M',
+              modelName: 'facebook/opt-125m',
+              modelUri: 'hf://facebook/opt-125m',
+              isReady: true,
+              additionalAnnotations: {
+                'opendatahub.io/hardware-profile-name': 'dra-profile',
+                'opendatahub.io/hardware-profile-namespace': namespaceAnnotation,
+              },
+            }),
+          ],
+        });
+        const draProfile = mockHardwareProfile({
+          name: 'dra-profile',
+          namespace: profileNamespace,
+          displayName: 'DRA Profile',
+          dra: { resourceClaimTemplateName: 'single-mig-partition' },
+        });
+        cy.interceptK8sList(
+          { model: HardwareProfileModel, ns: 'opendatahub' },
+          mockK8sResourceList([
+            ...mockGlobalScopedHardwareProfiles,
+            ...(profileNamespace === 'opendatahub' ? [draProfile] : []),
+          ]),
+        );
+        cy.interceptK8sList(
+          { model: HardwareProfileModel, ns: 'test-project' },
+          mockK8sResourceList(profileNamespace === 'test-project' ? [draProfile] : []),
+        );
+        const resourceClaimRequestSpy = cy.spy().as('resourceClaimRequest');
+        cy.intercept({ pathname: /\/apis\/resource\.k8s\.io\// }, (req) => {
+          resourceClaimRequestSpy();
+          req.reply({ statusCode: 404, body: {} });
+        });
+
+        modelServingSection.visit('test-project');
+        const row = modelServingSection.getKServeRow('Facebook OPT 125M');
+        row.findToggleButton('llmd-serving').click();
+        row
+          .findDescriptionListItem('Hardware profile')
+          .next('dd')
+          .should('contain.text', 'DRA Profile');
+        row
+          .findHardwareProfileDRADetails()
+          .should('contain.text', 'Claim template')
+          .and('contain.text', 'Tech Preview')
+          .and('not.contain.text', 'Device requests');
+        row.findHardwareProfileDRATemplate().should('have.text', 'single-mig-partition');
+        row.findHardwareProfileDRADescription().should('not.exist');
+        row.findHardwareProfileDRADetails().testA11y();
+        cy.get('@resourceClaimRequest').should('not.have.been.called');
+      });
+    });
+
     it('should display both KServe and LLMD deployments in the same project (global)', () => {
       initIntercepts({
         llmInferenceServices: [

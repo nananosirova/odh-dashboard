@@ -1,8 +1,9 @@
 import React from 'react';
 import { HardwareProfileFeatureVisibility } from '@odh-dashboard/k8s-core';
 import type { NotebookKind } from '@odh-dashboard/k8s-core';
-import { useDashboardNamespace } from '@odh-dashboard/plugin-core';
+// eslint-disable-next-line @odh-dashboard/no-restricted-imports
 import { isHardwareProfileEnabled } from '@odh-dashboard/internal/pages/hardwareProfiles/utils';
+// eslint-disable-next-line @odh-dashboard/no-restricted-imports
 import { useHardwareProfilesByFeatureVisibility } from '@odh-dashboard/internal/pages/hardwareProfiles/useHardwareProfilesByFeatureVisibility';
 import { HardwareProfileBindingStateInfo } from './types';
 import type { HardwareProfileResource } from './types';
@@ -18,12 +19,11 @@ export const useHardwareProfileBindingState = (
   resource?: NotebookKind | HardwareProfileResource,
   visibility?: HardwareProfileFeatureVisibility[],
 ): [HardwareProfileBindingStateInfo | null, boolean, Error | undefined] => {
-  const { dashboardNamespace } = useDashboardNamespace();
   const hardwareProfileName =
     resource?.metadata.annotations?.['opendatahub.io/hardware-profile-name'];
   const hardwareProfileNamespace =
     resource?.metadata.annotations?.['opendatahub.io/hardware-profile-namespace'] ||
-    dashboardNamespace;
+    resource?.metadata.namespace;
   const resourceVersion =
     resource?.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version'];
 

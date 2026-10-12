@@ -475,6 +475,94 @@ describe('Model Serving Global', () => {
       .should('have.text', 'Small Profile');
   });
 
+  it('should show DRA claim template in the expanded row for a DRA hardware profile', () => {
+    initIntercepts({
+      inferenceServices: [
+        mockInferenceServiceK8sResource({
+          name: 'llama-service',
+          displayName: 'Llama Service',
+          runtimeName: 'llama-service',
+          hardwareProfileName: 'dra-profile',
+          hardwareProfileNamespace: 'opendatahub',
+        }),
+      ],
+      servingRuntimes: [
+        mockServingRuntimeK8sResource({
+          name: 'llama-service',
+          displayName: 'Llama Service',
+          namespace: 'test-project',
+        }),
+      ],
+    });
+    cy.interceptK8sList(
+      { model: HardwareProfileModel, ns: 'opendatahub' },
+      mockK8sResourceList([
+        ...mockGlobalScopedHardwareProfiles,
+        mockHardwareProfile({
+          name: 'dra-profile',
+          displayName: 'DRA Profile',
+          dra: { resourceClaimTemplateName: 'single-mig-partition' },
+          annotations: {
+            'opendatahub.io/resource-claim-description':
+              'Requests one partitioned GPU device for the workload.',
+          },
+        }),
+      ]),
+    );
+    const resourceClaimRequestSpy = cy.spy().as('resourceClaimRequest');
+    cy.intercept({ pathname: /\/apis\/resource\.k8s\.io\// }, (req) => {
+      resourceClaimRequestSpy();
+      req.reply({ statusCode: 404, body: {} });
+    });
+
+    modelServingGlobal.visit('test-project');
+    const kserveRow = modelServingSection.getKServeRow('Llama Service');
+    kserveRow.findToggleButton().click();
+    kserveRow
+      .findDescriptionListItem('Hardware profile')
+      .next('dd')
+      .should('have.text', 'DRA Profile');
+    kserveRow
+      .findHardwareProfileDRADetails()
+      .should('contain.text', 'Claim template')
+      .and('contain.text', 'Tech Preview')
+      .and('not.contain.text', 'Device requests');
+    kserveRow.findHardwareProfileDRATemplate().should('have.text', 'single-mig-partition');
+    kserveRow
+      .findHardwareProfileDRADescription()
+      .should('contain.text', 'Requests one partitioned GPU device for the workload.');
+    kserveRow.findHardwareProfileDRADetails().testA11y();
+    cy.get('@resourceClaimRequest').should('not.have.been.called');
+  });
+
+  it('should not show DRA claim template in the expanded row for a non-DRA hardware profile', () => {
+    initIntercepts({
+      inferenceServices: [
+        mockInferenceServiceK8sResource({
+          name: 'llama-service',
+          displayName: 'Llama Service',
+          runtimeName: 'llama-service',
+        }),
+      ],
+      servingRuntimes: [
+        mockServingRuntimeK8sResource({
+          name: 'llama-service',
+          displayName: 'Llama Service',
+          namespace: 'test-project',
+        }),
+      ],
+    });
+
+    modelServingGlobal.visit('test-project');
+    const kserveRow = modelServingSection.getKServeRow('Llama Service');
+    kserveRow.findToggleButton().click();
+    kserveRow
+      .findDescriptionListItem('Hardware profile')
+      .next('dd')
+      .should('have.text', 'Small Profile');
+    kserveRow.findHardwareProfileDRADetails().should('not.exist');
+  });
+
   describe('Table filter and pagination', () => {
     it('filter by name', () => {
       initIntercepts({});

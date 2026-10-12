@@ -10,7 +10,9 @@ import {
 import {
   isHardwareProfileEnabled,
   getHardwareProfileDisplayName,
+  getDRAHardwareProfileDetails,
 } from '@odh-dashboard/hardware-profiles/shared/utils';
+import DRAHardwareProfileDetailsSection from '@odh-dashboard/hardware-profiles/shared/DRAHardwareProfileDetailsSection';
 import { ScopedLabel } from '@odh-dashboard/ui-core';
 import { SupportedArea, useIsAreaAvailable } from '@odh-dashboard/plugin-core/areas';
 import type { UseAssignHardwareProfileResult } from '@odh-dashboard/hardware-profiles/shared';
@@ -28,32 +30,39 @@ const HardwareProfileNameValue = ({
     hardwareProfileResult.podSpecOptionsState.hardwareProfile.formData.selectedProfile;
   const { profilesLoaded, profilesLoadError } =
     hardwareProfileResult.podSpecOptionsState.hardwareProfile;
+  const draDetails =
+    hardwareProfile && profilesLoaded && !profilesLoadError
+      ? getDRAHardwareProfileDetails(hardwareProfile)
+      : undefined;
 
   return (
-    <DescriptionList isHorizontal horizontalTermWidthModifier={{ default: '250px' }}>
-      <DescriptionListGroup>
-        <DescriptionListTerm>Hardware profile</DescriptionListTerm>
-        <DescriptionListDescription data-testid="hardware-section">
-          {!hardwareProfile || profilesLoadError ? (
-            'Unknown'
-          ) : !profilesLoaded ? (
-            'Loading...'
-          ) : (
-            <Flex gap={{ default: 'gapSm' }}>
-              <FlexItem>{getHardwareProfileDisplayName(hardwareProfile)}</FlexItem>
-              <FlexItem>
-                {isProjectScopedAvailable && hardwareProfile.metadata.namespace === project && (
-                  <ScopedLabel isProject color="blue" isCompact>
-                    Project-scoped
-                  </ScopedLabel>
-                )}
-              </FlexItem>
-              <Flex>{!isHardwareProfileEnabled(hardwareProfile) ? '(disabled)' : ''}</Flex>
-            </Flex>
-          )}
-        </DescriptionListDescription>
-      </DescriptionListGroup>
-    </DescriptionList>
+    <>
+      <DescriptionList isHorizontal horizontalTermWidthModifier={{ default: '250px' }}>
+        <DescriptionListGroup>
+          <DescriptionListTerm>Hardware profile</DescriptionListTerm>
+          <DescriptionListDescription data-testid="hardware-section">
+            {!hardwareProfile || profilesLoadError ? (
+              'Unknown'
+            ) : !profilesLoaded ? (
+              'Loading...'
+            ) : (
+              <Flex gap={{ default: 'gapSm' }}>
+                <FlexItem>{getHardwareProfileDisplayName(hardwareProfile)}</FlexItem>
+                <FlexItem>
+                  {isProjectScopedAvailable && hardwareProfile.metadata.namespace === project && (
+                    <ScopedLabel isProject color="blue" isCompact>
+                      Project-scoped
+                    </ScopedLabel>
+                  )}
+                </FlexItem>
+                <Flex>{!isHardwareProfileEnabled(hardwareProfile) ? '(disabled)' : ''}</Flex>
+              </Flex>
+            )}
+          </DescriptionListDescription>
+        </DescriptionListGroup>
+      </DescriptionList>
+      {draDetails && <DRAHardwareProfileDetailsSection details={draDetails} />}
+    </>
   );
 };
 

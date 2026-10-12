@@ -1,7 +1,15 @@
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import {
+  k8sGetResource,
+  k8sListResource,
+  k8sListResourceItems,
+  useK8sWatchResource,
+} from '@openshift/dynamic-plugin-sdk-utils';
+import { mockHardwareProfile } from '@odh-dashboard/hardware-profiles/__mocks__/mockHardwareProfile';
 import { mockProjectK8sResource } from '@odh-dashboard/k8s-core/__mocks__/mockProjectK8sResource';
 import { KUEUE_QUEUE_LABEL } from '@odh-dashboard/k8s-core/kueue/workloadStatus';
 import NotebookTableRow from '#~/pages/projects/screens/detail/notebooks/NotebookTableRow';
@@ -15,6 +23,16 @@ import {
 } from '#~/concepts/hardwareProfiles/kueueUtils';
 import { mockNotebookK8sResource } from '#~/__mocks__/mockNotebookK8sResource';
 import { mockNotebookState } from '#~/__mocks__/mockNotebookState';
+import { useHardwareProfileBindingState } from '#~/concepts/hardwareProfiles/useHardwareProfileBindingState';
+import { HardwareProfileBindingState } from '#~/concepts/hardwareProfiles/const';
+
+jest.mock('@openshift/dynamic-plugin-sdk-utils', () => ({
+  ...jest.requireActual('@openshift/dynamic-plugin-sdk-utils'),
+  k8sGetResource: jest.fn(),
+  k8sListResource: jest.fn(),
+  k8sListResourceItems: jest.fn(),
+  useK8sWatchResource: jest.fn(),
+}));
 
 jest.mock('#~/utilities/useNotification', () => ({
   __esModule: true,
@@ -110,6 +128,7 @@ jest.mock('#~/pages/projects/screens/detail/notebooks/NotebookFeatureStoreList',
 }));
 
 const mockUseKueueConfiguration = jest.mocked(useKueueConfiguration);
+const mockUseHardwareProfileBindingState = jest.mocked(useHardwareProfileBindingState);
 
 const kueueEnabledConfig = {
   isKueueDisabled: false,
@@ -223,5 +242,106 @@ describe('NotebookTableRow — Kueue anomaly indicator', () => {
     renderRow();
 
     expect(screen.queryByTestId('kueue-anomaly-indicator')).not.toBeInTheDocument();
+  });
+});
+
+describe('NotebookTableRow — DRA claim template', () => {
+  const dra = { resourceClaimTemplateName: 'single-mig-partition' };
+  const descriptionAnnotation = 'opendatahub.io/resource-claim-description';
+
+  const renderExpandedRow = async () => {
+    renderRow();
+    await userEvent.click(
+      within(screen.getByTestId('notebook-table-expand-cell')).getByRole('button'),
+    );
+  };
+
+  const mockBoundProfile = (annotations?: Record<string, string>, withDRA = true) =>
+    mockUseHardwareProfileBindingState.mockReturnValue([
+      {
+        profile: mockHardwareProfile({
+          displayName: 'DRA Profile',
+          ...(withDRA && { dra }),
+          annotations,
+        }),
+      },
+      true,
+      undefined,
+    ]);
+
+  beforeEach(() => {
+    mockUseKueueConfiguration.mockReturnValue(kueueDisabledConfig);
+  });
+
+  it('should show the template name and description of the bound DRA hardware profile', async () => {
+    mockBoundProfile({
+      [descriptionAnnotation]: 'Requests one partitioned GPU device for the workload.',
+    });
+    await renderExpandedRow();
+
+    const draDetails = screen.getByTestId('hardware-profile-dra-details');
+    expect(draDetails).not.toHaveTextContent('Device requests');
+    expect(draDetails).toHaveTextContent('Tech Preview');
+    expect(draDetails).toHaveTextContent('Claim template');
+    expect(draDetails).not.toHaveTextContent('ResourceClaimTemplate');
+    expect(within(draDetails).getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+      'single-mig-partition',
+    );
+    expect(within(draDetails).getByTestId('hardware-profile-dra-description')).toHaveTextContent(
+      'Requests one partitioned GPU device for the workload.',
+    );
+    expect(screen.getByText('size-details')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['empty', { [descriptionAnnotation]: '' }],
+    ['whitespace-only', { [descriptionAnnotation]: '  \n\t  ' }],
+  ])('should omit the description when the annotation is %s', async (_, annotations) => {
+    mockBoundProfile(annotations);
+    await renderExpandedRow();
+
+    const draDetails = screen.getByTestId('hardware-profile-dra-details');
+    expect(within(draDetails).getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+      'single-mig-partition',
+    );
+    expect(
+      within(draDetails).queryByTestId('hardware-profile-dra-description'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('should not show DRA details for a non-DRA hardware profile', async () => {
+    mockBoundProfile({ [descriptionAnnotation]: 'Ignored without spec.dra' }, false);
+    await renderExpandedRow();
+
+    expect(screen.queryByTestId('hardware-profile-dra-details')).not.toBeInTheDocument();
+    expect(screen.queryByText('Device requests')).not.toBeInTheDocument();
+    expect(screen.getByText('size-details')).toBeInTheDocument();
+  });
+
+  it.each<[string, ReturnType<typeof useHardwareProfileBindingState>]>([
+    [
+      'is deleted',
+      [{ state: HardwareProfileBindingState.DELETED, profile: undefined }, true, undefined],
+    ],
+    ['is still loading', [null, false, undefined]],
+    ['failed to load', [null, true, new Error('Failed to load hardware profiles')]],
+  ])('should not show DRA details when the hardware profile %s', async (_, bindingState) => {
+    mockUseHardwareProfileBindingState.mockReturnValue(bindingState);
+    await renderExpandedRow();
+
+    expect(screen.queryByTestId('hardware-profile-dra-details')).not.toBeInTheDocument();
+    expect(screen.getByText('size-details')).toBeInTheDocument();
+  });
+
+  it('should not fetch the ResourceClaimTemplate or any ResourceClaim', async () => {
+    mockBoundProfile({ [descriptionAnnotation]: 'Some description' });
+    await renderExpandedRow();
+
+    expect(screen.getByTestId('hardware-profile-dra-details')).toBeInTheDocument();
+    expect(k8sGetResource).not.toHaveBeenCalled();
+    expect(k8sListResource).not.toHaveBeenCalled();
+    expect(k8sListResourceItems).not.toHaveBeenCalled();
+    expect(useK8sWatchResource).not.toHaveBeenCalled();
   });
 });
