@@ -247,6 +247,26 @@ export type HardwareProfileKind = K8sResourceCommon & {
   };
 };
 
+export type ResourceClaimTemplateKind = K8sResourceCommon & {
+  metadata: {
+    name: string;
+    namespace: string;
+  };
+  spec: {
+    spec: {
+      devices?: {
+        requests?: {
+          name: string;
+          exactly?: {
+            deviceClassName: string;
+            count?: number;
+          };
+        }[];
+      };
+    };
+  };
+};
+
 /**
  * @deprecated accelerator profiles are being removed; only in deprecation paths
  * modelmesh: RHOAIENG-34917, RHOAIENG-19185

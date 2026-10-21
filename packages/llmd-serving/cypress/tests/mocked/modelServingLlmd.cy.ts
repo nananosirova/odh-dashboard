@@ -215,6 +215,59 @@ describe('Model Serving LLMD', () => {
         .should('have.text', 'Small Profile');
     });
 
+    it('should display the claim template of a DRA LLMD deployment', () => {
+      initIntercepts({
+        llmInferenceServices: [
+          mockLLMInferenceServiceK8sResource({
+            name: 'dra-llmd-deployment',
+            displayName: 'DRA LLMD Deployment',
+            additionalAnnotations: { 'opendatahub.io/hardware-profile-name': 'dra-profile' },
+            resourceClaims: [{ name: 'hwp-dra', resourceClaimTemplateName: 'single-gpu' }],
+          }),
+        ],
+      });
+      cy.interceptK8sList(
+        { model: HardwareProfileModel, ns: 'opendatahub' },
+        mockK8sResourceList([
+          ...mockGlobalScopedHardwareProfiles,
+          mockHardwareProfile({
+            name: 'dra-profile',
+            displayName: 'DRA Profile',
+            dra: { resourceClaimTemplateName: 'single-mig-partition' },
+          }),
+        ]),
+      );
+
+      modelServingSection.visit('test-project');
+      const row = modelServingSection.getKServeRow('DRA LLMD Deployment');
+      row.findToggleButton('llmd-serving').click();
+      row
+        .findHardwareProfileDRADetails()
+        .should('contain.text', 'Claim template')
+        .and('contain.text', 'Tech Preview');
+      row.findHardwareProfileDRATemplate().should('have.text', 'single-gpu');
+    });
+
+    it('should not display a claim template for a non-DRA LLMD deployment', () => {
+      initIntercepts({
+        llmInferenceServices: [
+          mockLLMInferenceServiceK8sResource({
+            name: 'small-llmd-deployment',
+            displayName: 'Small LLMD Deployment',
+          }),
+        ],
+      });
+
+      modelServingSection.visit('test-project');
+      const row = modelServingSection.getKServeRow('Small LLMD Deployment');
+      row.findToggleButton('llmd-serving').click();
+      row
+        .findDescriptionListItem('Hardware profile')
+        .next('dd')
+        .should('have.text', 'Small Profile');
+      row.findHardwareProfileDRADetails().should('not.exist');
+    });
+
     it('should display both KServe and LLMD deployments in the same project (global)', () => {
       initIntercepts({
         llmInferenceServices: [

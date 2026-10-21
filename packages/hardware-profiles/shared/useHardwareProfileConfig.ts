@@ -32,6 +32,7 @@ export type HardwareProfileConfig = {
 export type UseHardwareProfileConfigResult = {
   formData: HardwareProfileConfig;
   initialHardwareProfile?: HardwareProfileKind;
+  initialResources?: ContainerResources;
   isFormDataValid: boolean;
   setFormData: UpdateObjectAtPropAndValue<HardwareProfileConfig>;
   resetFormData: () => void;
@@ -132,9 +133,10 @@ export const useHardwareProfileConfig = (
       projectScopedProfilesLoaded,
       projectScopedProfilesLoadError,
     ],
-  } = useHardwareProfilesByFeatureVisibility(visibleIn, resourceNamespace, { includeDRA: true });
+  } = useHardwareProfilesByFeatureVisibility(visibleIn, resourceNamespace, { dra: 'all' });
 
   const initialHardwareProfile = useRef<HardwareProfileKind | undefined>(undefined);
+  const initialResources = useRef<ContainerResources | undefined>(undefined);
   const [formData, setFormData, resetFormData] = useGenericObjectState<HardwareProfileConfig>({
     selectedProfile: undefined,
     useExistingSettings: false,
@@ -183,13 +185,21 @@ export const useHardwareProfileConfig = (
       }
 
       if (assignedProfile && isDRAHardwareProfile(assignedProfile)) {
-        initialHardwareProfile.current = assignedProfile;
-        setFormData('resources', {
+        const existingResources: ContainerResources = {
           ...resources,
           requests: resources?.requests ?? {},
           limits: resources?.limits ?? {},
-        });
-        setFormData('useExistingSettings', true);
+        };
+        const hasExistingRequestsOrLimits =
+          Object.keys(existingResources.requests ?? {}).length > 0 ||
+          Object.keys(existingResources.limits ?? {}).length > 0;
+        const assignedResources =
+          assignedProfile.spec.identifiers?.length && hasExistingRequestsOrLimits
+            ? mergeProfileIdentifiersIntoResources(existingResources, assignedProfile)
+            : existingResources;
+        initialHardwareProfile.current = assignedProfile;
+        initialResources.current = assignedResources;
+        setFormData('resources', assignedResources);
         setFormData('selectedProfile', assignedProfile);
         return;
       }
@@ -263,6 +273,7 @@ export const useHardwareProfileConfig = (
   return {
     formData,
     initialHardwareProfile: initialHardwareProfile.current,
+    initialResources: initialResources.current,
     isFormDataValid,
     setFormData,
     resetFormData,
@@ -275,8 +286,9 @@ const mergeProfileIdentifiersIntoResources = (
   existingResources: ContainerResources,
   hardwareProfile: HardwareProfileKind,
 ): ContainerResources => {
+  const claims = existingResources.claims?.length ? { claims: existingResources.claims } : {};
   if (!hardwareProfile.spec.identifiers || hardwareProfile.spec.identifiers.length === 0) {
-    return { requests: {}, limits: {} };
+    return { requests: {}, limits: {}, ...claims };
   }
   const profileResources = getContainerResourcesFromHardwareProfile(hardwareProfile);
   const profileIdentifierKeys = new Set(
@@ -309,5 +321,6 @@ const mergeProfileIdentifiersIntoResources = (
   return {
     requests: mergedRequests,
     limits: mergedLimits,
+    ...claims,
   };
 };

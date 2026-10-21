@@ -60,6 +60,20 @@ export class HardwareProfileSection {
     return cy.findByTestId('kueue-filtering-info');
   }
 
+  findProfileOption(name: string | RegExp): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByRole('option', { name });
+  }
+
+  findProfileOptionClaimTemplateMissingIcon(
+    name: string | RegExp,
+  ): Cypress.Chainable<JQuery<HTMLElement>> {
+    return this.findProfileOption(name).findByTestId('claim-template-missing-icon');
+  }
+
+  findTooltip(): Cypress.Chainable<JQuery<HTMLElement>> {
+    return cy.findByRole('tooltip');
+  }
+
   findCustomizeButton(): Cypress.Chainable<JQuery<HTMLElement>> {
     return cy.findByTestId('hardware-profile-customize').findByRole('button', {
       name: 'Customize resource requests and limits',
@@ -179,10 +193,6 @@ export class HardwareProfileSection {
         cy.findByText(errorMessage).should('exist');
       }
     });
-  }
-
-  findDRALockedMessage(): Cypress.Chainable<JQuery<HTMLElement>> {
-    return cy.findByTestId('dra-hardware-profile-locked');
   }
 
   findCustomizeSection(): Cypress.Chainable<JQuery<HTMLElement>> {

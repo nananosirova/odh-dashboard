@@ -194,6 +194,15 @@ export const getExistingResources = <T extends K8sResourceCommon>(
   };
 };
 
+export const getExistingPodSpec = <T extends K8sResourceCommon>(
+  cr: T | null | undefined,
+  paths?: CrPathConfig,
+): PodSpec | undefined => {
+  const podSpec: PodSpec | undefined =
+    cr && paths?.podSpecPath ? get(cr, paths.podSpecPath) : undefined;
+  return podSpec;
+};
+
 export const getExistingHardwareProfileData = <T extends K8sResourceCommon>(
   resource: T | null | undefined,
 ): {
@@ -248,6 +257,7 @@ export const applyHardwareProfileConfig = <T extends K8sResourceCommon>(
   cr: T,
   config: HardwareProfileConfig,
   paths?: CrPathConfig,
+  existingBinding: { name?: string; namespace?: string } = getExistingHardwareProfileData(cr),
 ): T => {
   const result = structuredClone(cr);
   const { selectedProfile, resources, useExistingSettings } = config;
@@ -256,10 +266,19 @@ export const applyHardwareProfileConfig = <T extends K8sResourceCommon>(
     if (!result.metadata) {
       result.metadata = {};
     }
+    const isNewBinding =
+      existingBinding.name !== selectedProfile.metadata.name ||
+      existingBinding.namespace !== selectedProfile.metadata.namespace;
     result.metadata.annotations = {
       ...result.metadata.annotations,
       'opendatahub.io/hardware-profile-name': selectedProfile.metadata.name,
       'opendatahub.io/hardware-profile-namespace': selectedProfile.metadata.namespace,
+      ...(isNewBinding
+        ? {
+            'opendatahub.io/hardware-profile-resource-version':
+              selectedProfile.metadata.resourceVersion ?? '',
+          }
+        : {}),
     };
     // Empty resources mean the workload had none. Writing them could create a container that
     // does not exist, for example on an LLMInferenceService whose container comes from baseRef.

@@ -8,6 +8,8 @@ import {
   type PodSpec,
 } from '@odh-dashboard/k8s-core';
 import { mockHardwareProfile } from '@odh-dashboard/hardware-profiles/__mocks__/mockHardwareProfile';
+import { getExistingPodSpec } from '@odh-dashboard/hardware-profiles/shared/utils';
+import { mockInferenceServiceK8sResource } from '@odh-dashboard/model-serving/__mocks__/mockInferenceServiceK8sResource';
 import { mockNotebookK8sResource } from '#~/__mocks__';
 import {
   getProfileScore,
@@ -24,6 +26,7 @@ import {
 } from '#~/concepts/hardwareProfiles/utils';
 import { UseHardwareProfileConfigResult } from '#~/concepts/hardwareProfiles/useHardwareProfileConfig';
 import { NOTEBOOK_HARDWARE_PROFILE_PATHS } from '#~/concepts/notebooks/const.ts';
+import { INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS } from '#~/concepts/hardwareProfiles/const';
 
 global.structuredClone = (val: unknown) => JSON.parse(JSON.stringify(val));
 
@@ -364,6 +367,41 @@ describe('getExistingResources', () => {
     // Just verify we got something back (even if it's defaults)
     expect(result).toHaveProperty('existingTolerations');
     expect(result).toHaveProperty('existingNodeSelector');
+  });
+});
+
+describe('getExistingPodSpec', () => {
+  const resourceClaims = [{ name: 'hwp-dra', resourceClaimTemplateName: 'single-gpu' }];
+
+  it('should return the pod spec at the configured path', () => {
+    const inferenceService = mockInferenceServiceK8sResource({ resourceClaims });
+    const podSpec = getExistingPodSpec(inferenceService, INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS);
+
+    expect(podSpec).toBe(inferenceService.spec.predictor);
+    expect(podSpec?.resourceClaims).toStrictEqual(resourceClaims);
+  });
+
+  it('should return undefined when the paths have no pod spec path', () => {
+    expect(
+      getExistingPodSpec(mockNotebookK8sResource({}), NOTEBOOK_HARDWARE_PROFILE_PATHS),
+    ).toBeUndefined();
+  });
+
+  it('should return undefined when the pod spec path does not exist on the resource', () => {
+    expect(
+      getExistingPodSpec(mockNotebookK8sResource({}), {
+        ...NOTEBOOK_HARDWARE_PROFILE_PATHS,
+        podSpecPath: 'spec.predictor',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('should return undefined without paths', () => {
+    expect(getExistingPodSpec(mockInferenceServiceK8sResource({ resourceClaims }))).toBeUndefined();
+  });
+
+  it('should return undefined for a null resource', () => {
+    expect(getExistingPodSpec(null, INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS)).toBeUndefined();
   });
 });
 
@@ -751,7 +789,7 @@ describe('applyHardwareProfileConfig', () => {
     );
   });
 
-  it('should keep the binding and existing resources without refreshing the resource version for a DRA hardware profile', () => {
+  it('should keep the resource version and the claims when saving a workload with its assigned DRA hardware profile', () => {
     const hardwareProfile = mockHardwareProfile({
       name: 'dra-profile',
       namespace: 'opendatahub',
@@ -759,14 +797,21 @@ describe('applyHardwareProfileConfig', () => {
       identifiers: [],
       dra: { resourceClaimTemplateName: 'single-gpu' },
     });
-    const notebook = mockNotebookK8sResource({});
+    const notebook = mockNotebookK8sResource({
+      hardwareProfileName: 'dra-profile',
+      hardwareProfileNamespace: 'opendatahub',
+      opts: {
+        metadata: { annotations: { 'opendatahub.io/hardware-profile-resource-version': '1' } },
+      },
+    });
     const existingResources = {
       requests: { cpu: '1', memory: '2Gi' },
       limits: { cpu: '1', memory: '2Gi' },
+      claims: [{ name: 'hwp-dra' }],
     };
     const config = {
       selectedProfile: hardwareProfile,
-      useExistingSettings: true,
+      useExistingSettings: false,
       resources: existingResources,
     };
 
@@ -778,10 +823,65 @@ describe('applyHardwareProfileConfig', () => {
     expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-namespace']).toBe(
       'opendatahub',
     );
-    expect(
-      result.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version'],
-    ).toBeUndefined();
+    expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version']).toBe(
+      '1',
+    );
     expect(result.spec.template.spec.containers[0].resources).toEqual(existingResources);
+  });
+
+  it('should write the resource version when a DRA hardware profile is newly selected', () => {
+    const hardwareProfile = mockHardwareProfile({
+      name: 'dra-profile',
+      namespace: 'opendatahub',
+      resourceVersion: '12345',
+      dra: { resourceClaimTemplateName: 'single-gpu' },
+    });
+    const notebook = mockNotebookK8sResource({
+      hardwareProfileName: 'regular-profile',
+      hardwareProfileNamespace: 'opendatahub',
+      opts: {
+        metadata: { annotations: { 'opendatahub.io/hardware-profile-resource-version': '1' } },
+      },
+    });
+
+    const result = applyHardwareProfileConfig(
+      notebook,
+      { selectedProfile: hardwareProfile, useExistingSettings: false },
+      paths,
+    );
+
+    expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-name']).toBe(
+      'dra-profile',
+    );
+    expect(result.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version']).toBe(
+      '12345',
+    );
+  });
+
+  it('should use the given existing binding to decide whether a DRA hardware profile is newly selected', () => {
+    const hardwareProfile = mockHardwareProfile({
+      name: 'dra-profile',
+      namespace: 'opendatahub',
+      resourceVersion: '12345',
+      dra: { resourceClaimTemplateName: 'single-gpu' },
+    });
+    const config = { selectedProfile: hardwareProfile, useExistingSettings: false };
+
+    const sameBinding = applyHardwareProfileConfig(mockNotebookK8sResource({}), config, paths, {
+      name: 'dra-profile',
+      namespace: 'opendatahub',
+    });
+    const newBinding = applyHardwareProfileConfig(mockNotebookK8sResource({}), config, paths, {
+      name: 'regular-profile',
+      namespace: 'opendatahub',
+    });
+
+    expect(
+      sameBinding.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version'],
+    ).toBeUndefined();
+    expect(
+      newBinding.metadata.annotations?.['opendatahub.io/hardware-profile-resource-version'],
+    ).toBe('12345');
   });
 
   it('should not create the container resources path for a DRA hardware profile when the workload has no resources', () => {

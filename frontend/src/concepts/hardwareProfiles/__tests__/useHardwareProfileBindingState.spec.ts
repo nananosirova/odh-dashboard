@@ -36,7 +36,7 @@ describe('useHardwareProfileBindingState', () => {
         useHardwareProfilesModule.filterHardwareProfileByFeatureVisibility(
           [draOnlyProfile],
           visibility,
-          options?.includeDRA,
+          options?.dra,
         ),
         true,
         undefined,

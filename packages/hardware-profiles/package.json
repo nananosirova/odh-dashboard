@@ -12,6 +12,7 @@
     "./shared/const": "./shared/const.ts",
     "./shared/types": "./shared/types.ts",
     "./shared/useHardwareProfileBindingState": "./shared/useHardwareProfileBindingState.ts",
+    "./shared/useResourceClaimTemplateNames": "./shared/useResourceClaimTemplateNames.ts",
     "./shared/utils": "./shared/utils.ts",
     "./shared/validationUtils": "./shared/validationUtils.ts",
     "./extensions": "./extensions.ts",

@@ -1,8 +1,11 @@
 import * as React from 'react';
 import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
+import type { PodSpec } from '@odh-dashboard/k8s-core';
+import { INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS } from '@odh-dashboard/hardware-profiles/shared/const';
 import { mockHardwareProfile } from '@odh-dashboard/hardware-profiles/__mocks__/mockHardwareProfile';
 import { mockUseAssignHardwareProfileResult } from '@odh-dashboard/hardware-profiles/__mocks__/mockUseAssignHardwareProfileResult';
+import { mockInferenceServiceK8sResource } from '@odh-dashboard/model-serving/__mocks__/mockInferenceServiceK8sResource';
 import { mockExtensions } from '../../../__tests__/mockUtils';
 import { DeploymentRowExpandedSection } from '../row/DeploymentsTableRowExpandedSection';
 
@@ -128,5 +131,77 @@ describe('DeploymentsTableRowExpandedSection', () => {
     expect(availability).toHaveTextContent('Model-as-a-Service (MaaS)');
     expect(availability).toHaveTextContent('Gen AI Studio');
     expect(screen.queryByTestId('use-case-description-item')).not.toBeInTheDocument();
+  });
+
+  describe('DRA claim template', () => {
+    const draProfile = () =>
+      mockHardwareProfile({
+        name: 'dra-profile',
+        dra: { resourceClaimTemplateName: 'single-mig-partition' },
+      });
+    const draDeployment = (resourceClaims?: PodSpec['resourceClaims']) => ({
+      modelServingPlatformId: 'kserve',
+      model: mockInferenceServiceK8sResource({
+        hardwareProfileName: 'dra-profile',
+        hardwareProfileNamespace: 'opendatahub',
+        resourceClaims,
+      }),
+    });
+
+    it('should show the claim template of the deployment DRA claim', () => {
+      render(
+        <DeploymentRowExpandedSection
+          deployment={draDeployment([{ name: 'hwp-dra', resourceClaimTemplateName: 'single-gpu' }])}
+          isVisible
+          hardwareProfilePaths={INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS}
+          hardwareProfile={draProfile()}
+        />,
+      );
+
+      const draDetails = screen.getByTestId('hardware-profile-dra-details');
+      expect(draDetails).toHaveTextContent('Claim template');
+      expect(draDetails).toHaveTextContent('Tech Preview');
+      expect(screen.getByTestId('hardware-profile-dra-template')).toHaveTextContent('single-gpu');
+    });
+
+    it('should fall back to the claim template of the hardware profile', () => {
+      render(
+        <DeploymentRowExpandedSection
+          deployment={draDeployment()}
+          isVisible
+          hardwareProfilePaths={INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS}
+          hardwareProfile={draProfile()}
+        />,
+      );
+
+      expect(screen.getByTestId('hardware-profile-dra-template')).toHaveTextContent(
+        'single-mig-partition',
+      );
+    });
+
+    it('should not show the claim template for a non-DRA hardware profile', () => {
+      render(
+        <DeploymentRowExpandedSection
+          deployment={draDeployment()}
+          isVisible
+          hardwareProfilePaths={INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS}
+          hardwareProfile={mockHardwareProfile({ name: 'small-profile' })}
+        />,
+      );
+
+      expect(screen.queryByTestId('hardware-profile-dra-details')).not.toBeInTheDocument();
+    });
+
+    it('should not show the claim template without a bound hardware profile', () => {
+      render(
+        <DeploymentRowExpandedSection
+          deployment={draDeployment([{ name: 'hwp-dra', resourceClaimTemplateName: 'single-gpu' }])}
+          isVisible
+          hardwareProfilePaths={INFERENCE_SERVICE_HARDWARE_PROFILE_PATHS}
+        />,
+      );
+
+      expect(screen.queryByTestId('hardware-profile-dra-details')).not.toBeInTheDocument();
+    });
   });
 });

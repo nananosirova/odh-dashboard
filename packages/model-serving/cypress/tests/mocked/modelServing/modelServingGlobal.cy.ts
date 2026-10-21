@@ -475,6 +475,64 @@ describe('Model Serving Global', () => {
       .should('have.text', 'Small Profile');
   });
 
+  describe('DRA claim template in the expanded deployment row', () => {
+    const initDRAIntercepts = (inferenceService: InferenceServiceKind) => {
+      initIntercepts({ inferenceServices: [inferenceService] });
+      cy.interceptK8sList(
+        { model: HardwareProfileModel, ns: 'opendatahub' },
+        mockK8sResourceList([
+          ...mockGlobalScopedHardwareProfiles,
+          mockHardwareProfile({
+            name: 'dra-profile',
+            displayName: 'DRA Profile',
+            dra: { resourceClaimTemplateName: 'single-mig-partition' },
+          }),
+        ]),
+      );
+    };
+
+    it('should show the claim template of a DRA deployment', () => {
+      initDRAIntercepts(
+        mockInferenceServiceK8sResource({
+          hardwareProfileName: 'dra-profile',
+          hardwareProfileNamespace: 'opendatahub',
+          resourceClaims: [{ name: 'hwp-dra', resourceClaimTemplateName: 'single-gpu' }],
+        }),
+      );
+
+      modelServingGlobal.visit('test-project');
+      const kserveRow = modelServingSection.getKServeRow('Test Inference Service');
+      kserveRow.findToggleButton().click();
+      kserveRow
+        .findHardwareProfileDRADetails()
+        .should('contain.text', 'Claim template')
+        .and('contain.text', 'Tech Preview');
+      kserveRow.findHardwareProfileDRATemplate().should('have.text', 'single-gpu');
+      kserveRow
+        .findDescriptionListItem('Hardware profile')
+        .next('dd')
+        .should('contain.text', 'DRA Profile');
+    });
+
+    it('should not show a claim template for a non-DRA deployment', () => {
+      initDRAIntercepts(
+        mockInferenceServiceK8sResource({
+          hardwareProfileName: 'small-profile',
+          hardwareProfileNamespace: 'opendatahub',
+        }),
+      );
+
+      modelServingGlobal.visit('test-project');
+      const kserveRow = modelServingSection.getKServeRow('Test Inference Service');
+      kserveRow.findToggleButton().click();
+      kserveRow
+        .findDescriptionListItem('Hardware profile')
+        .next('dd')
+        .should('have.text', 'Small Profile');
+      kserveRow.findHardwareProfileDRADetails().should('not.exist');
+    });
+  });
+
   describe('Table filter and pagination', () => {
     it('filter by name', () => {
       initIntercepts({});

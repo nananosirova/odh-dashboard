@@ -1,9 +1,6 @@
 import * as React from 'react';
 import {
   FormGroup,
-  FormHelperText,
-  HelperText,
-  HelperTextItem,
   Stack,
   StackItem,
   ExpandableSection,
@@ -23,11 +20,7 @@ import { useHardwareProfilesByFeatureVisibility } from '@odh-dashboard/internal/
 import { ZodErrorHelperText } from '@odh-dashboard/ui-core/components/ZodErrorFormHelperText';
 import { ProjectScopedPopover } from '@odh-dashboard/ui-core';
 import DashboardHelpTooltip from '@odh-dashboard/ui-core/components/DashboardHelpTooltip';
-import {
-  DRA_HARDWARE_PROFILE_WORKLOAD_LOCKED_MESSAGE,
-  HARDWARE_PROFILE_SELECTION_HELP,
-  LOCAL_QUEUE_MISSING_BODY,
-} from './const';
+import { HARDWARE_PROFILE_SELECTION_HELP, LOCAL_QUEUE_MISSING_BODY } from './const';
 import { hardwareProfileValidationSchema } from './validationUtils';
 import HardwareProfileSelect from './HardwareProfileSelect';
 import HardwareProfileCustomize from './HardwareProfileCustomize';
@@ -54,17 +47,16 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
   isLocalQueueMissing = false,
 }) => {
   const {
-    hardwareProfile: { formData, initialHardwareProfile, setFormData },
+    hardwareProfile: { formData, initialHardwareProfile, initialResources, setFormData },
   } = podSpecOptionsState;
   const isProjectScoped = useIsAreaAvailable(SupportedArea.DS_PROJECT_SCOPED).status;
-  const isDRAProfile = !!formData.selectedProfile && isDRAHardwareProfile(formData.selectedProfile);
 
   const validation = useValidation(formData, hardwareProfileValidationSchema);
   const hasValidationErrors = Object.keys(validation.getAllValidationIssues()).length > 0;
   const {
     globalProfiles: [hardwareProfiles, loaded, error],
     projectProfiles: projectScopedHardwareProfiles,
-  } = useHardwareProfilesByFeatureVisibility(visibleIn, project);
+  } = useHardwareProfilesByFeatureVisibility(visibleIn, project, { dra: 'valid' });
 
   const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -82,22 +74,25 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
       return;
     }
 
-    // Re-selecting the assigned DRA profile is not a change. Its resources are owned outside the
-    // dashboard, so keep them rather than resetting to the profile's identifiers.
+    setFormData('selectedProfile', profile);
+    setFormData('useExistingSettings', false);
+
     if (
-      isDRAProfile &&
-      formData.selectedProfile?.metadata.name === profile.metadata.name &&
-      formData.selectedProfile.metadata.namespace === profile.metadata.namespace
+      initialHardwareProfile &&
+      isDRAHardwareProfile(initialHardwareProfile) &&
+      profile.metadata.name === initialHardwareProfile.metadata.name &&
+      profile.metadata.namespace === initialHardwareProfile.metadata.namespace
     ) {
+      setFormData('resources', initialResources);
       return;
     }
 
     // Reset customization when changing profiles
-    const newResources = getContainerResourcesFromHardwareProfile(profile);
-
-    setFormData('selectedProfile', profile);
-    setFormData('useExistingSettings', false);
-    setFormData('resources', newResources);
+    const claims = formData.resources?.claims;
+    setFormData('resources', {
+      ...getContainerResourcesFromHardwareProfile(profile),
+      ...(claims?.length ? { claims } : {}),
+    });
   };
 
   return (
@@ -153,19 +148,9 @@ const HardwareProfileFormSection: React.FC<HardwareProfileFormSectionProps<PodSp
               }
             />
             <ZodErrorHelperText zodIssue={validation.getAllValidationIssues()} showAllErrors />
-            {isDRAProfile && (
-              <FormHelperText>
-                <HelperText>
-                  <HelperTextItem data-testid="dra-hardware-profile-locked">
-                    {DRA_HARDWARE_PROFILE_WORKLOAD_LOCKED_MESSAGE}
-                  </HelperTextItem>
-                </HelperText>
-              </FormHelperText>
-            )}
           </FormGroup>
         </StackItem>
-        {!isDRAProfile &&
-          formData.selectedProfile?.spec.identifiers &&
+        {formData.selectedProfile?.spec.identifiers &&
           formData.selectedProfile.spec.identifiers.length > 0 &&
           formData.resources && (
             <StackItem>

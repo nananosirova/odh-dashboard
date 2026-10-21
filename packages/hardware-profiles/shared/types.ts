@@ -69,6 +69,7 @@ export type CrPathConfig = {
   containerResourcesPath: string;
   tolerationsPath: string;
   nodeSelectorPath: string;
+  podSpecPath?: string;
 };
 
 export type DRAHardwareProfileDetails = {
